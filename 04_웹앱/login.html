@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<!-- 로그인 페이지 (로그인 없이 접근 가능한 유일한 화면) -->
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>로그인 · Prism 검사·재고 관리</title>
+  <link rel="stylesheet" href="/assets/css/common.css" />
+</head>
+<body>
+  <div class="login-wrap">
+    <form class="login-box" id="login-form">
+      <div class="login-brand"><span class="logo">SecuGen</span> Prism 검사 · 재고 관리</div>
+      <label class="field"><span>아이디</span><input type="text" id="login-id" autocomplete="username" autofocus /></label>
+      <label class="field"><span>비밀번호</span><input type="password" id="login-pw" autocomplete="current-password" /></label>
+      <div class="form-actions"><button class="btn primary" type="submit" style="width:100%">로그인</button></div>
+      <div class="login-msg" id="login-msg"></div>
+    </form>
+  </div>
+  <script>
+    const form = document.getElementById("login-form");
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const msg = document.getElementById("login-msg");
+      msg.textContent = "";
+      try {
+        const res = await fetch("/api/auth/login", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: document.getElementById("login-id").value, password: document.getElementById("login-pw").value }),
+        });
+        const d = await res.json();
+        if (d.ok) { location.href = "/"; }
+        else { msg.textContent = d.error || "로그인 실패"; }
+      } catch (err) { msg.textContent = "서버 연결 실패"; }
+    });
+  </script>
+</body>
+</html>

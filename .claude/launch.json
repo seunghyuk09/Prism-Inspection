@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "prism-web",
+      "runtimeExecutable": "C:\\Python312-32\\python.exe",
+      "runtimeArgs": ["04_웹앱\\backend\\local_server.py", "10000"],
+      "port": 10000
+    }
+  ]
+}

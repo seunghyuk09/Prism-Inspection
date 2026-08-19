@@ -1,0 +1,37 @@
+# ── 데이터베이스(실데이터) — GitHub 커밋 금지, Postgres 로 별도 이관 ──
+02_DB/*.sqlite
+02_DB/*.sqlite-*
+02_DB/*.bak*
+*.sqlite
+*.sqlite3
+*.db
+
+# ── 사용자 계정(비밀번호 해시) — 커밋 금지 ──
+00_설정/사용자목록.json
+
+# ── 로그 ──
+*.log
+server_*.log
+
+# ── 파이썬 ──
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+env/
+
+# ── Claude 로컬 설정(개인/비밀 가능) ──
+.claude/settings.local.json
+.claude/**/local/
+
+# ── 배포 산출물(덤프는 데이터 포함이라 커밋 금지) ──
+08_배포/*_dump.sql
+08_배포/*.env
+*.env
+
+# ── OS/기타 ──
+Thumbs.db
+Desktop.ini
+.DS_Store
+*.tmp
