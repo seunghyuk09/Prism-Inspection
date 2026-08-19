@@ -99,8 +99,8 @@ def log_activity(category: str, action: str, target: str = "", detail=None, oper
              json.dumps(detail, ensure_ascii=False) if detail is not None else None, operator))
         conn.commit()
         conn.close()
-    except sqlite3.Error:
-        pass  # 로깅 실패가 본 기능을 막지 않도록
+    except Exception:  # noqa: BLE001 — 로깅 실패(SQLite/PG)가 본 기능을 막지 않도록
+        pass
 
 
 class Handler(SimpleHTTPRequestHandler):

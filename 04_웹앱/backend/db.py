@@ -9,6 +9,8 @@
 """
 from __future__ import annotations
 
+import os
+import re
 import sqlite3
 from datetime import datetime
 from pathlib import Path
@@ -18,6 +20,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]   # 프로젝트 루트
 DB_DIR = ROOT / "02_DB"
 DB_PATH = DB_DIR / "prism.sqlite"
+
+# ── 백엔드 선택: DATABASE_URL 있으면 PostgreSQL, 없으면 SQLite(기본) ──
+# 서비스 코드는 그대로 두고, 연결 래퍼가 방언 차이(?→%s, INSERT OR IGNORE,
+# lastrowid, IntegrityError)를 흡수한다.
+DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
+IS_PG = DATABASE_URL.startswith(("postgres://", "postgresql://"))
+PG_SCHEMA = (os.environ.get("PG_SCHEMA", "prism").strip() or "prism")
+SCHEMA_PG_FILE = ROOT / "08_배포" / "schema_postgres.sql"
 
 
 def now_str() -> str:
@@ -254,9 +264,96 @@ CREATE TABLE IF NOT EXISTS activity_log (
 """
 
 
+# ── PostgreSQL 호환 래퍼 (서비스 코드 무변경) ────────────────
+def _translate(sql: str) -> str:
+    """SQLite SQL → PostgreSQL SQL. ?→%s, INSERT OR IGNORE→ON CONFLICT DO NOTHING."""
+    on_conflict = bool(re.match(r"(?is)\s*INSERT\s+OR\s+IGNORE\s+INTO\b", sql))
+    if on_conflict:
+        sql = re.sub(r"(?is)^\s*INSERT\s+OR\s+IGNORE\s+INTO\b", "INSERT INTO", sql, count=1)
+    sql = sql.replace("?", "%s")
+    if on_conflict:
+        sql = sql.rstrip().rstrip(";") + " ON CONFLICT DO NOTHING"
+    return sql
+
+
+def _split_sql(script: str) -> list:
+    """스키마 스크립트를 개별 문장으로 분리(문자열 내 세미콜론 없음 가정 — 본 스키마 안전)."""
+    no_comments = "\n".join(line.split("--", 1)[0] for line in script.splitlines())
+    return [s.strip() for s in no_comments.split(";") if s.strip()]
+
+
+class _PgCursor:
+    """psycopg 커서를 sqlite3 커서처럼(iter/fetch/lastrowid)."""
+    def __init__(self, cur):
+        self._cur = cur
+        self.lastrowid = None
+
+    def fetchone(self):
+        return self._cur.fetchone()
+
+    def fetchall(self):
+        return self._cur.fetchall()
+
+    def __iter__(self):
+        return iter(self._cur.fetchall())
+
+
+class _PgConn:
+    """psycopg 연결을 sqlite3.Connection 처럼 보이게 하는 얇은 래퍼."""
+    def __init__(self, raw):
+        self._raw = raw
+
+    def execute(self, sql, params=()):
+        import psycopg
+        q = _translate(sql)
+        # INSERT 는 lastrowid 대체용 RETURNING id 자동 부가(모든 테이블에 id 존재)
+        want_id = q.lstrip()[:6].upper() == "INSERT" and " RETURNING " not in q.upper()
+        if want_id:
+            q = q.rstrip().rstrip(";") + " RETURNING id"
+        cur = self._raw.cursor()
+        try:
+            cur.execute(q, tuple(params) if params else None)
+        except psycopg.errors.IntegrityError as e:
+            # 서비스는 db.sqlite3.IntegrityError 로 잡으므로 타입 통일
+            raise sqlite3.IntegrityError(str(e))
+        wrap = _PgCursor(cur)
+        if want_id:
+            try:
+                row = cur.fetchone()
+                if row is not None:
+                    wrap.lastrowid = row["id"] if isinstance(row, dict) else row[0]
+            except Exception:  # noqa: BLE001 (ON CONFLICT 로 미삽입 시 RETURNING 0행)
+                wrap.lastrowid = None
+        return wrap
+
+    def executescript(self, script):
+        cur = self._raw.cursor()
+        for stmt in _split_sql(script):
+            cur.execute(stmt)
+        return _PgCursor(cur)
+
+    def commit(self):
+        self._raw.commit()
+
+    def rollback(self):
+        self._raw.rollback()
+
+    def close(self):
+        self._raw.close()
+
+
 # ── 연결 ─────────────────────────────────────────────────────
-def connect() -> sqlite3.Connection:
-    """행을 dict 처럼 다루는 연결을 반환."""
+def connect():
+    """행을 dict 처럼 다루는 연결을 반환 (SQLite 기본 / PostgreSQL 은 래퍼)."""
+    if IS_PG:
+        try:
+            import psycopg
+            from psycopg.rows import dict_row
+        except ImportError as e:
+            raise RuntimeError("PostgreSQL 사용 시 psycopg 필요: pip install \"psycopg[binary]\"") from e
+        raw = psycopg.connect(DATABASE_URL, row_factory=dict_row,
+                              options=f"-c search_path={PG_SCHEMA},public")
+        return _PgConn(raw)
     DB_DIR.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(DB_PATH))
     conn.row_factory = sqlite3.Row
@@ -284,12 +381,31 @@ def _migrate(conn) -> None:
 
 def init_db() -> None:
     """스키마 생성 + 마이그레이션 + 초기 시드(여러 번 호출해도 안전)."""
+    if IS_PG:
+        _init_pg()
+        return
     conn = connect()
     try:
         conn.executescript(SCHEMA_SQL)
         _migrate(conn)
         conn.commit()
         _seed(conn)
+    finally:
+        conn.close()
+
+
+def _init_pg() -> None:
+    """PostgreSQL: prism 스키마가 없으면 DDL 로드 + 시드. 이미 있으면(이관 완료) 유지."""
+    conn = connect()
+    try:
+        r = conn.execute("SELECT to_regclass(?) AS r", (f"{PG_SCHEMA}.supplier",)).fetchone()
+        exists = r is not None and r["r"] is not None
+        if not exists:
+            if SCHEMA_PG_FILE.exists():
+                conn.executescript(SCHEMA_PG_FILE.read_text(encoding="utf-8"))
+                conn.commit()
+            _seed(conn)
+        conn.commit()
     finally:
         conn.close()
 
@@ -367,7 +483,11 @@ def table_counts(conn: sqlite3.Connection) -> dict:
     for n in names:
         try:
             out[n] = conn.execute(f"SELECT COUNT(*) AS c FROM {n}").fetchone()["c"]
-        except sqlite3.Error:
+        except Exception:  # noqa: BLE001 (SQLite/PG 공통 — 카운트 실패는 대시보드에 영향만)
+            try:
+                conn.rollback()   # PG: 오류 후 트랜잭션 복구
+            except Exception:  # noqa: BLE001
+                pass
             out[n] = None
     return out
 

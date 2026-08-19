@@ -49,11 +49,18 @@ psql "<conn>" -c "SET search_path TO prism; SELECT count(*) FROM inspection;"  #
 > 접속정보(비밀번호 포함)는 저장소에 커밋하지 마세요. `PGPASSWORD` 환경변수나
 > `~/.pgpass` 를 쓰면 명령에 비밀번호를 노출하지 않아도 됩니다.
 
-### (선택) 앱을 SQLite → PostgreSQL 로 전환하려면
-현재 백엔드는 `sqlite3` 직접 호출입니다. Postgres 로 **운영 DB를 전환**하려면
-`04_웹앱/backend/db.py` + 각 `*_service.py` 의 데이터 접근을 `psycopg` 로 포팅해야 합니다
-(플레이스홀더 `?`→`%s`, `INSERT OR IGNORE`→`ON CONFLICT DO NOTHING`, 커넥션 관리 등).
-= 별도 작업 항목. 위 이관만으로는 "PG에 데이터 사본"이 생기고, 앱은 계속 SQLite 로 돕니다.
+### 앱을 PostgreSQL 로 돌리기 (✅ 포팅 완료 — 듀얼 지원)
+`db.py` 가 **환경변수 `DATABASE_URL`** 로 백엔드를 고릅니다. 서비스 코드는 그대로.
+```bash
+pip install "psycopg[binary]"                       # PG 드라이버(서버에 설치)
+export DATABASE_URL="postgresql://USER:PW@HOST:PORT/DBNAME"   # 있으면 PG, 없으면 SQLite
+export PG_SCHEMA="prism"                             # (선택) 기본 prism
+python run_server.py 10000
+```
+- 연결 래퍼가 `?`→`%s`, `INSERT OR IGNORE`→`ON CONFLICT`, `lastrowid`→`RETURNING`,
+  UniqueViolation→sqlite IntegrityError 를 자동 흡수 → **서비스 15개 무변경**.
+- `DATABASE_URL` 을 **안 주면 기존 SQLite** 그대로(개발/롤백 안전). SQLite 회귀검증 90/0 통과.
+- ⚠️ **PG 런타임 최종검증은 실제 PG 연결 후**(이 개발환경엔 PG 서버 없음) — 배포 시 함께 확인.
 
 ---
 
