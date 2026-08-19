@@ -25,7 +25,8 @@ env/
 .claude/settings.local.json
 .claude/**/local/
 
-# ── 배포 산출물(덤프는 데이터 포함이라 커밋 금지) ──
+# ── 배포 산출물(데이터 포함이라 커밋 금지) ──
+08_배포/prism_data.sql
 08_배포/*_dump.sql
 08_배포/*.env
 *.env
