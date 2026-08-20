@@ -24,9 +24,23 @@ DB_PATH = DB_DIR / "prism.sqlite"
 # ── 백엔드 선택: DATABASE_URL 있으면 PostgreSQL, 없으면 SQLite(기본) ──
 # 서비스 코드는 그대로 두고, 연결 래퍼가 방언 차이(?→%s, INSERT OR IGNORE,
 # lastrowid, IntegrityError)를 흡수한다.
-DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
+# 접속정보 우선순위: 환경변수 > 00_설정/db.env(KEY=VALUE, git 제외) > 기본(SQLite).
+def _load_db_env() -> dict:
+    cfg = {}
+    f = ROOT / "00_설정" / "db.env"
+    if f.exists():
+        for line in f.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                k, v = line.split("=", 1)
+                cfg[k.strip()] = v.strip().strip('"').strip("'")
+    return cfg
+
+
+_DBENV = _load_db_env()
+DATABASE_URL = (os.environ.get("DATABASE_URL") or _DBENV.get("DATABASE_URL") or "").strip()
 IS_PG = DATABASE_URL.startswith(("postgres://", "postgresql://"))
-PG_SCHEMA = (os.environ.get("PG_SCHEMA", "prism").strip() or "prism")
+PG_SCHEMA = (os.environ.get("PG_SCHEMA") or _DBENV.get("PG_SCHEMA") or "prism").strip() or "prism"
 SCHEMA_PG_FILE = ROOT / "08_배포" / "schema_postgres.sql"
 
 
