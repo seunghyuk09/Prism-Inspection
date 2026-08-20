@@ -13,6 +13,15 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 SERVER = ROOT / "04_웹앱" / "backend" / "local_server.py"
 
+# pythonw(창 없는 실행)에서는 sys.stdout/stderr 가 None 이라 print/로그(sys.stderr.write)가
+# 예외를 내고 요청 처리 스레드가 죽는다(응답 없이 연결 끊김). → 헤드리스면 로그파일로 우회.
+if sys.stdout is None or sys.stderr is None:
+    _logf = open(ROOT / "server_headless.log", "a", encoding="utf-8", buffering=1)
+    if sys.stdout is None:
+        sys.stdout = _logf
+    if sys.stderr is None:
+        sys.stderr = _logf
+
 port = sys.argv[1] if len(sys.argv) > 1 else "10000"
 
 if not SERVER.exists():
