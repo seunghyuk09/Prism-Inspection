@@ -5,7 +5,11 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Prism 검사·재고 관리</title>
-  <link rel="stylesheet" href="/assets/css/common.css?v=20260819b" />
+  <link rel="stylesheet" href="/assets/css/common.css?v=20260821b" />
+  <script>
+    // 저장된 테마를 렌더 직전에 적용(화면 깜빡임 방지)
+    try { var _t = localStorage.getItem("prism-theme"); if (_t) document.documentElement.setAttribute("data-theme", _t); } catch (e) {}
+  </script>
 </head>
 <body>
   <header class="topbar">
@@ -15,6 +19,7 @@
     </div>
     <div class="userbar">
       <span class="env" id="env-info">연결 중…</span>
+      <button type="button" class="theme-toggle" id="theme-toggle" title="테마 전환" aria-label="밝은/어두운 테마 전환">🌙</button>
       <div class="usermenu-wrap">
         <button type="button" class="user-info" id="user-info-btn" aria-haspopup="true" aria-expanded="false">
           <span id="u-name">—</span><span class="user-role" id="u-role">사용자</span><span class="caret">▾</span>
@@ -68,15 +73,6 @@
   <nav class="menu-subnav" id="subnav" aria-label="하위메뉴"></nav>
 
   <main id="main">
-    <!-- 대시보드 -->
-    <section class="panel active" data-panel="dashboard">
-      <h2>대시보드</h2>
-      <p class="sub">입고 · 검사 · 페인트 · 잔량을 관리합니다. 아래 카드 또는 상단 메뉴로 이동하세요.</p>
-      <div class="dash-cards" id="dash-cards"><div class="muted">불러오는 중…</div></div>
-      <h3>바로가기</h3>
-      <div class="category-grid" id="home-cats"></div>
-    </section>
-
     <!-- 기준정보 (프리즘/공급사/검사항목/제품마스터 — masters.js 가 채움) -->
     <section class="panel" data-panel="masters">
       <h2 id="masters-title">기준정보</h2>
@@ -125,10 +121,15 @@
       <p class="sub">프리즘 코드별 현재고(생산·입고 − 소비). 오프렌 등 잔량은 기초재고로 입력하세요.</p>
       <div id="stock-root"><div class="muted">불러오는 중…</div></div>
     </section>
-    <section class="panel" data-panel="report">
-      <h2>집계</h2>
+    <section class="panel active" data-panel="report">
+      <h2>집계 · 현황</h2>
       <p class="sub">입고일·로트·공급사·검사항목별 양품/불량/불량률·수율. 전체·건별 엑셀 다운로드.</p>
       <div id="report-root"><div class="muted">불러오는 중…</div></div>
+      <hr class="sec-div" />
+      <h3 class="sec-title">전체 현황</h3>
+      <div class="dash-cards" id="dash-cards"><div class="muted">불러오는 중…</div></div>
+      <h3 class="sec-title">바로가기</h3>
+      <div class="category-grid" id="home-cats"></div>
     </section>
     <section class="panel" data-panel="log"><h2>이력 로그</h2><p class="sub">누가 언제 무엇을 했는지 기록. <span class="badge">예정</span></p></section>
     <section class="panel" data-panel="users">
@@ -148,8 +149,8 @@
   <script src="/assets/js/inspection.js?v=20260819b"></script>
   <script src="/assets/js/stock.js?v=20260819b"></script>
   <script src="/assets/js/plan.js?v=20260819b"></script>
-  <script src="/assets/js/report.js?v=20260819b"></script>
+  <script src="/assets/js/report.js?v=20260821b"></script>
   <script src="/assets/js/users.js?v=20260819b"></script>
-  <script src="/assets/js/app.js?v=20260819b"></script>
+  <script src="/assets/js/app.js?v=20260821b"></script>
 </body>
 </html>

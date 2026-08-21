@@ -17,7 +17,11 @@ def _rate(defect, base):
 
 
 # ── 화면용 집계 ──────────────────────────────────────────────
-def summary(data=None) -> dict:
+def summary(data=None, product=None) -> dict:
+    """전체 집계. product(item_code) 지정 시 해당 품목만 필터."""
+    product = (product or "").strip() or None
+    lot_filter = " AND pm.item_code = ?" if product else ""   # pm 조인이 있는 쿼리용
+    lp = [product] if product else []
     conn = db.connect()
     try:
         # 로트별(입고검사 있는 로트)
@@ -31,7 +35,7 @@ def summary(data=None) -> dict:
             "FROM lot l JOIN receipt r ON r.id=l.receipt_id JOIN prism_master pm ON pm.id=r.prism_id JOIN supplier s ON s.id=r.supplier_id "
             "LEFT JOIN inspection inc ON inc.lot_id=l.id AND inc.stage='INCOMING' "
             "LEFT JOIN inspection post ON post.lot_id=l.id AND post.stage='POST_PAINT' "
-            "WHERE inc.id IS NOT NULL ORDER BY r.receipt_date DESC, l.id DESC").fetchall()
+            "WHERE inc.id IS NOT NULL" + lot_filter + " ORDER BY r.receipt_date DESC, l.id DESC", lp).fetchall()
         by_lot = []
         for r in lots:
             d = dict(r)
@@ -61,42 +65,63 @@ def summary(data=None) -> dict:
 
         # 공급사별 — 입고합계와 검사합계를 따로 집계 후 병합(조인 중복합산 방지)
         recv = {r["supplier_id"]: r["s"] for r in conn.execute(
-            "SELECT supplier_id, COALESCE(SUM(received_qty),0) s FROM receipt GROUP BY supplier_id").fetchall()}
+            "SELECT r.supplier_id, COALESCE(SUM(r.received_qty),0) s FROM receipt r "
+            "JOIN prism_master pm ON pm.id=r.prism_id WHERE 1=1" + lot_filter + " GROUP BY r.supplier_id", lp).fetchall()}
         insp = {r["supplier_id"]: r for r in conn.execute(
             "SELECT r.supplier_id, COALESCE(SUM(inc.inspected_qty),0) inspected, "
             "       COALESCE(SUM(inc.good_qty),0) good, COALESCE(SUM(inc.defect_qty),0) defect "
             "FROM inspection inc JOIN lot l ON l.id=inc.lot_id JOIN receipt r ON r.id=l.receipt_id "
-            "WHERE inc.stage='INCOMING' GROUP BY r.supplier_id").fetchall()}
+            "JOIN prism_master pm ON pm.id=r.prism_id "
+            "WHERE inc.stage='INCOMING'" + lot_filter + " GROUP BY r.supplier_id", lp).fetchall()}
         by_supplier = []
         for s in conn.execute("SELECT id,name FROM supplier ORDER BY name").fetchall():
             i = insp.get(s["id"])
             inspected = i["inspected"] if i else 0
             good = i["good"] if i else 0
             defect = i["defect"] if i else 0
+            if product and not recv.get(s["id"], 0) and not inspected:
+                continue   # 선택 품목과 무관한 공급사는 제외
             by_supplier.append({"supplier_name": s["name"], "received": recv.get(s["id"], 0),
                                 "inspected": inspected, "good": good, "defect": defect,
                                 "defect_rate": _rate(defect, inspected)})
 
-        # 항목별 불량률(단계 분리)
-        inc_total = conn.execute("SELECT COALESCE(SUM(inspected_qty),0) s FROM inspection WHERE stage='INCOMING'").fetchone()["s"]
-        post_total = conn.execute("SELECT COALESCE(SUM(inspected_qty),0) s FROM inspection WHERE stage='POST_PAINT'").fetchone()["s"]
+        # 항목별 불량률(단계 분리) — 품목 필터 시 lot→receipt→prism_master 조인으로 제한
+        _insp_join = "JOIN lot l ON l.id=inc.lot_id JOIN receipt r ON r.id=l.receipt_id JOIN prism_master pm ON pm.id=r.prism_id "
+        inc_total = conn.execute(
+            "SELECT COALESCE(SUM(inc.inspected_qty),0) s FROM inspection inc " + _insp_join +
+            "WHERE inc.stage='INCOMING'" + lot_filter, lp).fetchone()["s"]
+        post_total = conn.execute(
+            "SELECT COALESCE(SUM(inc.inspected_qty),0) s FROM inspection inc " + _insp_join +
+            "WHERE inc.stage='POST_PAINT'" + lot_filter, lp).fetchone()["s"]
         items = conn.execute("SELECT id,name,category FROM inspection_item ORDER BY sort_order,id").fetchall()
+        _def_join = "JOIN inspection i ON i.id=idf.inspection_id JOIN lot l ON l.id=i.lot_id JOIN receipt r ON r.id=l.receipt_id JOIN prism_master pm ON pm.id=r.prism_id "
         by_item = []
         for it in items:
             inc_def = conn.execute(
-                "SELECT COALESCE(SUM(idf.defect_qty),0) s FROM inspection_defect idf "
-                "JOIN inspection i ON i.id=idf.inspection_id WHERE i.stage='INCOMING' AND idf.inspection_item_id=?", (it["id"],)).fetchone()["s"]
+                "SELECT COALESCE(SUM(idf.defect_qty),0) s FROM inspection_defect idf " + _def_join +
+                "WHERE i.stage='INCOMING' AND idf.inspection_item_id=?" + lot_filter, [it["id"]] + lp).fetchone()["s"]
             post_def = conn.execute(
-                "SELECT COALESCE(SUM(idf.defect_qty),0) s FROM inspection_defect idf "
-                "JOIN inspection i ON i.id=idf.inspection_id WHERE i.stage='POST_PAINT' AND idf.inspection_item_id=?", (it["id"],)).fetchone()["s"]
+                "SELECT COALESCE(SUM(idf.defect_qty),0) s FROM inspection_defect idf " + _def_join +
+                "WHERE i.stage='POST_PAINT' AND idf.inspection_item_id=?" + lot_filter, [it["id"]] + lp).fetchone()["s"]
             by_item.append({
                 "name": it["name"], "category": it["category"],
                 "inc_defect": inc_def, "inc_rate": _rate(inc_def, inc_total),
                 "post_defect": post_def, "post_rate": _rate(post_def, post_total),
             })
 
-        return {"ok": True, "by_lot": by_lot, "by_supplier": by_supplier, "by_item": by_item,
-                "totals": {"inc_inspected": inc_total, "post_inspected": post_total, "lot_count": len(by_lot)}}
+        # 품목 선택 목록(항상 전체 — 필터와 무관하게 드롭다운을 채움)
+        products = [dict(r) for r in conn.execute(
+            "SELECT pm.item_code item_code, MIN(pm.prism_type) prism_type, MIN(pm.model) model, "
+            "       COUNT(DISTINCT l.id) lots "
+            "FROM lot l JOIN receipt r ON r.id=l.receipt_id JOIN prism_master pm ON pm.id=r.prism_id "
+            "JOIN inspection inc ON inc.lot_id=l.id AND inc.stage='INCOMING' "
+            "WHERE pm.item_code IS NOT NULL AND pm.item_code <> '' "
+            "GROUP BY pm.item_code ORDER BY pm.item_code").fetchall()]
+
+        return {"ok": True, "product": product, "products": products,
+                "by_lot": by_lot, "by_supplier": by_supplier, "by_item": by_item,
+                "totals": {"received_total": sum(recv.values()), "inc_inspected": inc_total,
+                           "post_inspected": post_total, "lot_count": len(by_lot)}}
     finally:
         conn.close()
 
@@ -241,37 +266,79 @@ def lot_excel(lot_id, label=None):
     return _wb_bytes(wb), f"검사이력_{disp}.xlsx"
 
 
-def report_excel(data=None):
-    """전체 집계 엑셀. (bytes, filename) 반환."""
+def report_excel(data=None, product=None):
+    """전체 집계 엑셀 — 테두리 + 색구분(양품 초록/불량 빨강) + 입고일 기준(로트번호 제외).
+    product(item_code) 지정 시 해당 품목만."""
     import openpyxl
-    from openpyxl.styles import Font
+    from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
 
-    s = summary()
+    s = summary(product=product)
+    tag = f"_{s['product']}" if s.get("product") else ""
     wb = openpyxl.Workbook()
 
+    FONT = "맑은 고딕"
+    thin = Side(style="thin", color="9BB0D6")
+    BORDER = Border(left=thin, right=thin, top=thin, bottom=thin)
+    F_TITLE = PatternFill("solid", fgColor="305496")   # 진파랑(제목)
+    F_HEAD = PatternFill("solid", fgColor="4472C4")    # 파랑(헤더)
+    F_GOOD = PatternFill("solid", fgColor="E2EFDA")    # 연초록(양품)
+    F_BAD = PatternFill("solid", fgColor="FCE4D6")     # 연주황(불량)
+    C = Alignment(horizontal="center", vertical="center")
+    RGT = Alignment(horizontal="right", vertical="center")
+    LFT = Alignment(horizontal="left", vertical="center")
+
+    def styled_sheet(ws, title, headers, rows, good_idx=(), bad_idx=(), num_idx=()):
+        ncol = len(headers)
+        # 제목행(병합)
+        ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=ncol)
+        t = ws.cell(1, 1, title)
+        t.font = Font(name=FONT, bold=True, size=13, color="FFFFFF"); t.fill = F_TITLE; t.alignment = C
+        for c in range(1, ncol + 1):
+            cc = ws.cell(1, c); cc.fill = F_TITLE; cc.border = BORDER
+        ws.row_dimensions[1].height = 22
+        # 헤더행
+        for c, h in enumerate(headers, 1):
+            cc = ws.cell(2, c, h)
+            cc.font = Font(name=FONT, bold=True, color="FFFFFF"); cc.fill = F_HEAD; cc.alignment = C; cc.border = BORDER
+        # 데이터행
+        for ri, row in enumerate(rows, 3):
+            for ci, val in enumerate(row, 1):
+                cc = ws.cell(ri, ci, val)
+                cc.font = Font(name=FONT); cc.border = BORDER
+                cc.alignment = RGT if (ci - 1) in num_idx else LFT
+                if (ci - 1) in good_idx:
+                    cc.fill = F_GOOD
+                elif (ci - 1) in bad_idx:
+                    cc.fill = F_BAD
+
+    # ① 입고일별(로트번호 제외)
     ws1 = wb.active
-    ws1.title = "로트별"
-    cols = ["로트번호", "입고일", "프리즘", "공급사", "로트수량", "입고양품", "입고불량", "입고불량률%", "최종양품", "수율%"]
-    ws1.append(cols)
-    _style_header(ws1, [f"{c}1" for c in "ABCDEFGHIJ"])
-    for b in s["by_lot"]:
-        ws1.append([b.get("lot_label") or b["lot_no"], b["receipt_date"], f"{b['prism_type']} {b.get('model') or ''}", b["supplier_name"],
-                    b["lot_qty"], b["inc_good"], b["inc_defect"], b["inc_rate"], b["final_good"], b["yield"]])
-    for col in "ABCD":
-        ws1.column_dimensions[col].width = 16
+    ws1.title = "입고일별 집계"
+    h1 = ["입고일", "프리즘", "공급사", "입고수량", "입고양품", "입고불량", "입고불량률(%)", "최종양품", "수율(%)"]
+    rows1 = [[b["receipt_date"], f"{b['prism_type']} {b.get('model') or ''}".strip(), b["supplier_name"],
+              b["lot_qty"], b["inc_good"], b["inc_defect"], b["inc_rate"], b["final_good"], b["yield"]]
+             for b in s["by_lot"]]
+    t1 = "입고일별 검사 집계" + (f" — 품목 {s['product']}" if tag else "")
+    styled_sheet(ws1, t1, h1, rows1, good_idx={4, 7}, bad_idx={5, 6}, num_idx={3, 4, 5, 6, 7, 8})
+    for col, w in zip("ABCDEFGHI", [13, 22, 12, 11, 11, 11, 14, 11, 10]):
+        ws1.column_dimensions[col].width = w
 
+    # ② 공급사별
     ws2 = wb.create_sheet("공급사별")
-    ws2.append(["공급사", "입고수량", "검사수량", "양품", "불량", "불량률%"])
-    _style_header(ws2, [f"{c}1" for c in "ABCDEF"])
-    for b in s["by_supplier"]:
-        ws2.append([b["supplier_name"], b["received"], b["inspected"], b["good"], b["defect"], b["defect_rate"]])
+    h2 = ["공급사", "입고수량", "검사수량", "양품", "불량", "불량률(%)"]
+    rows2 = [[b["supplier_name"], b["received"], b["inspected"], b["good"], b["defect"], b["defect_rate"]]
+             for b in s["by_supplier"]]
+    styled_sheet(ws2, "공급사별 집계", h2, rows2, good_idx={3}, bad_idx={4}, num_idx={1, 2, 3, 4, 5})
+    for col, w in zip("ABCDEF", [16, 12, 12, 11, 11, 12]):
+        ws2.column_dimensions[col].width = w
 
-    ws3 = wb.create_sheet("항목별불량률")
-    ws3.append(["검사항목", "분류", "입고불량", "입고불량률%", "페인트후불량", "페인트후불량률%"])
-    _style_header(ws3, [f"{c}1" for c in "ABCDEF"])
-    for b in s["by_item"]:
-        ws3.append([b["name"], b["category"], b["inc_defect"], b["inc_rate"], b["post_defect"], b["post_rate"]])
-    for ws in (ws2, ws3):
-        ws.column_dimensions["A"].width = 18
+    # ③ 검사항목별
+    ws3 = wb.create_sheet("검사항목별")
+    h3 = ["검사항목", "분류", "입고불량", "입고불량률(%)", "페인트후불량", "페인트후불량률(%)"]
+    rows3 = [[b["name"], b["category"], b["inc_defect"], b["inc_rate"], b["post_defect"], b["post_rate"]]
+             for b in s["by_item"]]
+    styled_sheet(ws3, "검사항목별 불량", h3, rows3, bad_idx={2, 4}, num_idx={2, 3, 4, 5})
+    for col, w in zip("ABCDEF", [16, 10, 11, 15, 13, 17]):
+        ws3.column_dimensions[col].width = w
 
-    return _wb_bytes(wb), "프리즘_집계.xlsx"
+    return _wb_bytes(wb), f"프리즘_집계{tag}.xlsx"

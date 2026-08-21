@@ -6,7 +6,6 @@ const { get: apiGet, el, esc } = App;
 // ── 메뉴/패널 설정(한 곳에서 관리) ───────────────────────────
 // 기능을 추가하면 여기 한 줄만 늘리면 카테고리바·하위메뉴·홈카드에 자동 반영.
 const NAV = [
-  { cat: "대시보드", panel: "dashboard" },
   { cat: "기준정보", items: [
       { label: "프리즘마스터", panel: "masters", sub: "prism" },
       { label: "공급사", panel: "masters", sub: "supplier" },
@@ -33,7 +32,6 @@ const NAV = [
 // ── 패널 표시 + 패널별 모듈 호출 ────────────────────────────
 function showPanel(name, sub) {
   document.querySelectorAll(".panel").forEach((p) => p.classList.toggle("active", p.dataset.panel === name));
-  if (name === "dashboard") loadDashboard();
   if (name === "masters" && window.Masters) window.Masters.show(sub || "prism");
   if (name === "receipt" && window.Receipt) window.Receipt.show();
   if (name === "inbound_history" && window.InboundHistory) window.InboundHistory.show();
@@ -42,7 +40,7 @@ function showPanel(name, sub) {
   if (name === "inspection_post" && window.Inspection) window.Inspection.showStage("POST_PAINT");
   if (name === "plan" && window.Plan) window.Plan.show();
   if (name === "stock" && window.Stock) window.Stock.show();
-  if (name === "report" && window.Report) window.Report.show();
+  if (name === "report") { if (window.Report) window.Report.show(); loadDashboard(); }
   if (name === "users" && window.UsersAdmin) window.UsersAdmin.show();
 }
 
@@ -96,6 +94,34 @@ function buildMenu() {
     selectCategory(ci);
     selectItem(ci, Number(b.dataset.item));
   });
+
+  // 초기 진입: 집계·관리 → 집계(현황) 화면
+  const hc = NAV.findIndex((n) => n.items && n.items.some((it) => it.panel === "report"));
+  if (hc >= 0) {
+    selectCategory(hc);   // items[0] 자동 선택 → showPanel("report")
+    const ri = NAV[hc].items.findIndex((it) => it.panel === "report");
+    if (ri > 0) selectItem(hc, ri);   // report 가 첫 항목이 아닐 때만 추가 선택(중복 로드 방지)
+  } else {
+    selectCategory(0);
+  }
+}
+
+// ── 테마(다크/라이트) 전환 ─────────────────────────────────
+function currentTheme() {
+  return document.documentElement.getAttribute("data-theme") || "dark";
+}
+function applyTheme(t) {
+  document.documentElement.setAttribute("data-theme", t);
+  try { localStorage.setItem("prism-theme", t); } catch (e) {}
+  const btn = el("theme-toggle");
+  if (btn) { btn.textContent = t === "light" ? "☀️" : "🌙"; btn.title = t === "light" ? "어두운 테마로" : "밝은 테마로"; }
+  // 차트 등 테마색 반영이 필요한 화면 갱신
+  if (window.Report && typeof window.Report.onThemeChange === "function") window.Report.onThemeChange();
+}
+function initTheme() {
+  applyTheme(currentTheme());   // 저장값(head 인라인) 반영 + 아이콘 세팅
+  const btn = el("theme-toggle");
+  if (btn) btn.addEventListener("click", () => applyTheme(currentTheme() === "light" ? "dark" : "light"));
 }
 
 // ── 대시보드 ───────────────────────────────────────────────
@@ -188,7 +214,7 @@ async function initAuth() {
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
+  initTheme();
   await initAuth();
-  buildMenu();
-  loadDashboard();
+  buildMenu();   // 마지막에 집계(현황) 화면으로 진입 + 현황 카드 로드
 });

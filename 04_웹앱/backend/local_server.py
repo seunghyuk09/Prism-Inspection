@@ -124,7 +124,9 @@ class Handler(SimpleHTTPRequestHandler):
 
     def _send_file(self, data_bytes, filename, content_type):
         # 한글 파일명은 RFC5987(filename*) 로 — 다운로드 시 깨지지 않게
-        ascii_name = filename.encode("ascii", "ignore").decode() or "download.xlsx"
+        ascii_name = filename.encode("ascii", "ignore").decode()
+        # 응답헤더 인젝션 방지: 개행·따옴표·역슬래시·제어문자 제거 (filename* 는 quote 로 이미 안전)
+        ascii_name = "".join(c for c in ascii_name if c.isprintable() and c not in '"\\') or "download.xlsx"
         self.send_response(200)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Disposition",
@@ -298,7 +300,8 @@ class Handler(SimpleHTTPRequestHandler):
             if path == "/api/inbound-history":
                 return self._send_json(inbound_history_service.inbound_history())
             if path == "/api/report/summary":
-                return self._send_json(report_service.summary())
+                qs = parse_qs(urlparse(self.path).query)
+                return self._send_json(report_service.summary(product=qs.get("product", [None])[0]))
             if path == "/api/report/lot-excel":
                 qs = parse_qs(urlparse(self.path).query)
                 data_bytes, fn = report_service.lot_excel(qs.get("lot_id", [None])[0], qs.get("label", [None])[0])
@@ -306,7 +309,8 @@ class Handler(SimpleHTTPRequestHandler):
                     return self._send_json({"ok": False, "error": "로트를 찾을 수 없습니다."}, status=404)
                 return self._send_file(data_bytes, fn, XLSX_MIME)
             if path == "/api/report/excel":
-                data_bytes, fn = report_service.report_excel()
+                qs = parse_qs(urlparse(self.path).query)
+                data_bytes, fn = report_service.report_excel(product=qs.get("product", [None])[0])
                 return self._send_file(data_bytes, fn, XLSX_MIME)
             if path in GET_LIST_ROUTES:
                 # 목록 함수는 list 를 반환 → {ok, items} 로 감싼다
