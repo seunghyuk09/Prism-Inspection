@@ -24,9 +24,10 @@ import db  # noqa: E402  (db.env / DATABASE_URL / _split_sql 재사용)
 
 
 def _ensure_database(url: str) -> None:
-    """대상 데이터베이스가 없으면 'postgres' DB 에 접속해 생성(createdb 권한 필요)."""
+    """대상 데이터베이스가 없으면 'postgres' DB 에 접속해 생성(createdb 권한 필요).
+    URL/키=값 두 DSN 형식 모두 지원(psycopg conninfo 파싱)."""
     import psycopg
-    import urllib.parse as up
+    from psycopg.conninfo import conninfo_to_dict, make_conninfo
     try:
         c = psycopg.connect(url)
         c.close()
@@ -34,10 +35,10 @@ def _ensure_database(url: str) -> None:
     except psycopg.OperationalError as e:
         if "does not exist" not in str(e).lower():
             raise  # 비번오류 등 다른 문제는 그대로 알림
-    u = up.urlparse(url)
-    target = u.path.lstrip("/") or "prism"
-    admin_url = u._replace(path="/postgres").geturl()
-    ac = psycopg.connect(admin_url)
+    info = conninfo_to_dict(url)
+    target = info.get("dbname") or "prism"
+    admin = make_conninfo(**{**info, "dbname": "postgres"})
+    ac = psycopg.connect(admin)
     ac.autocommit = True
     ac.execute(f'CREATE DATABASE "{target}"')
     ac.close()
@@ -103,7 +104,7 @@ def main() -> int:
             cur.execute(f"SELECT count(*) AS c FROM {db.PG_SCHEMA}.{t}")
             print(f"   {t:18s}: {cur.fetchone()['c']}")
         conn.commit()
-        print("[완료] PostgreSQL 이관 성공 ✔")
+        print("[완료] PostgreSQL 이관 성공 (OK)")
         return 0
     except Exception as e:  # noqa: BLE001
         conn.rollback()

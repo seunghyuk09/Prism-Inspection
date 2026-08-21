@@ -39,7 +39,9 @@ def _load_db_env() -> dict:
 
 _DBENV = _load_db_env()
 DATABASE_URL = (os.environ.get("DATABASE_URL") or _DBENV.get("DATABASE_URL") or "").strip()
-IS_PG = DATABASE_URL.startswith(("postgres://", "postgresql://"))
+# DATABASE_URL 이 채워져 있으면 PG 모드. URL 형식(postgresql://...) 과
+# 키=값 형식(host=... user=... password=...) 둘 다 허용(특수문자 비번 안전).
+IS_PG = bool(DATABASE_URL)
 PG_SCHEMA = (os.environ.get("PG_SCHEMA") or _DBENV.get("PG_SCHEMA") or "prism").strip() or "prism"
 SCHEMA_PG_FILE = ROOT / "08_배포" / "schema_postgres.sql"
 
@@ -409,8 +411,18 @@ def init_db() -> None:
 
 
 def _init_pg() -> None:
-    """PostgreSQL: prism 스키마가 없으면 DDL 로드 + 시드. 이미 있으면(이관 완료) 유지."""
-    conn = connect()
+    """PostgreSQL: prism 스키마가 없으면 DDL 로드 + 시드. 이미 있으면(이관 완료) 유지.
+    부팅 직후 PG 서비스가 아직 안 떴을 수 있어 초기 접속을 잠깐 재시도한다(창 없는 자동시작 대비)."""
+    import time
+    conn = None
+    for attempt in range(15):
+        try:
+            conn = connect()
+            break
+        except Exception:  # noqa: BLE001 — PG 미기동 시 재시도
+            if attempt >= 14:
+                raise
+            time.sleep(2)
     try:
         r = conn.execute("SELECT to_regclass(?) AS r", (f"{PG_SCHEMA}.supplier",)).fetchone()
         exists = r is not None and r["r"] is not None
