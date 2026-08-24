@@ -32,6 +32,7 @@ def stock_status(data=None) -> dict:
             cid = p["id"]
             adj = _scalar(conn, "SELECT COALESCE(SUM(qty),0) s FROM stock_adjustment WHERE prism_id=?", (cid,))
             consumed = _scalar(conn, "SELECT COALESCE(SUM(qty),0) s FROM consumption WHERE prism_id=?", (cid,))
+            unusable = _scalar(conn, "SELECT COALESCE(SUM(qty),0) s FROM unusable_stock WHERE prism_id=?", (cid,))
             incoming_good = _scalar(conn,
                 "SELECT COALESCE(SUM(i.good_qty),0) s FROM inspection i "
                 "JOIN lot l ON l.id=i.lot_id JOIN receipt r ON r.id=l.receipt_id "
@@ -56,7 +57,8 @@ def stock_status(data=None) -> dict:
                 produced, on_hand, basis = incoming_good, adj + incoming_good - consumed, "입고검사 양품"
 
             rows.append({**dict(p), "opening_adj": adj, "produced": produced,
-                         "sent_paint": sent_paint, "consumed": consumed, "on_hand": on_hand, "basis": basis})
+                         "sent_paint": sent_paint, "consumed": consumed, "on_hand": on_hand, "basis": basis,
+                         "unusable": unusable, "available": on_hand - unusable})
         return {"ok": True, "items": rows}
     finally:
         conn.close()

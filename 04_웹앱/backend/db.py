@@ -267,6 +267,19 @@ CREATE TABLE IF NOT EXISTS stock_adjustment (
     FOREIGN KEY (prism_id) REFERENCES prism_master(id)
 );
 
+-- 사용불가(불량/보류) 재고: 현재고에는 포함되나 실제 사용 불가한 수량(표시용).
+-- +추가 / -해소(반납·폐기 시). on_hand 계산에는 영향 없음(가용 = 현재고 - 사용불가).
+CREATE TABLE IF NOT EXISTS unusable_stock (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    prism_id     INTEGER NOT NULL,
+    qty          INTEGER NOT NULL,
+    category     TEXT NOT NULL DEFAULT '불량',
+    dated        TEXT NOT NULL,
+    note         TEXT,
+    created_at   TEXT NOT NULL,
+    FOREIGN KEY (prism_id) REFERENCES prism_master(id)
+);
+
 -- 행위/이력 로그: 로그인은 없지만 '누가(operator) 언제 무엇을' 기록(기록 신뢰성).
 CREATE TABLE IF NOT EXISTS activity_log (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
