@@ -226,6 +226,12 @@ def lot_excel(lot_id, label=None):
         c.font = Font(name=FONT, bold=bold, size=size)
         c.border = BORDER
         c.alignment = align
+        if isinstance(val, bool):
+            pass
+        elif isinstance(val, int):
+            c.number_format = "#,##0"       # 천단위 콤마 (10,000)
+        elif isinstance(val, float):
+            c.number_format = "#,##0.00"    # 소수(불량률 등)
         if fill:
             c.fill = fill
         return c
@@ -347,6 +353,12 @@ def report_excel(data=None, product=None):
                 cc = ws.cell(ri, ci, val)
                 cc.font = Font(name=FONT); cc.border = BORDER
                 cc.alignment = C   # 전체 가운데 정렬
+                if isinstance(val, bool):
+                    pass
+                elif isinstance(val, int):
+                    cc.number_format = "#,##0"          # 천단위 콤마 (10,000)
+                elif isinstance(val, float):
+                    cc.number_format = "#,##0.00"       # 소수(불량률 등)
                 if (ci - 1) in good_idx:
                     cc.fill = F_GOOD
                 elif (ci - 1) in bad_idx:
