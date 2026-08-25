@@ -113,12 +113,17 @@ window.Masters = (function () {
       <button type="button" class="btn" data-act="reset">초기화</button></div></form>`;
   }
 
-  function buildTable(key, cfg, items) {
-    const head = cfg.columns.map((c) => `<th>${esc(c.label)}</th>`).join("") + (cfg.hasActive ? "<th>사용</th>" : "") + "<th>관리</th>";
+  function buildTable(key, cfg, items, editable) {
+    const head = cfg.columns.map((c) => `<th>${esc(c.label)}</th>`).join("") + (cfg.hasActive ? "<th>사용</th>" : "") + (editable ? "<th>관리</th>" : "");
     const body = items.map((r) => {
       const tds = cfg.columns.map((c) => `<td>${c.fmt ? c.fmt(r[c.key], r) : esc(r[c.key])}</td>`).join("");
-      const activeCell = cfg.hasActive ? `<td><button class="mini" data-act="toggle" data-id="${r.id}" data-cur="${r.is_active}">${r.is_active ? "사용중" : "중지"}</button></td>` : "";
-      return `<tr>${tds}${activeCell}<td><button class="mini" data-act="edit" data-id="${r.id}">수정</button></td></tr>`;
+      const activeCell = cfg.hasActive
+        ? (editable
+            ? `<td><button class="mini" data-act="toggle" data-id="${r.id}" data-cur="${r.is_active}">${r.is_active ? "사용중" : "중지"}</button></td>`
+            : `<td>${r.is_active ? "사용중" : "중지"}</td>`)
+        : "";
+      const editCell = editable ? `<td><button class="mini" data-act="edit" data-id="${r.id}">수정</button></td>` : "";
+      return `<tr>${tds}${activeCell}${editCell}</tr>`;
     }).join("");
     return `<table class="tbl"><thead><tr>${head}</tr></thead><tbody>${body || `<tr><td colspan="9" class="muted">데이터 없음</td></tr>`}</tbody></table>`;
   }
@@ -204,8 +209,14 @@ window.Masters = (function () {
     }
     const cfg = configs()[key];
     current = { key, cfg };
-    el("masters-root").innerHTML = `<div class="m-grid"><div>${buildForm(key, cfg)}</div><div>${buildTable(key, cfg, cache[key])}</div></div>`;
-    bindForm(key, cfg);
+    const canEdit = !!(window.App && App.isAdmin);   // 기준정보 편집은 관리자만(서버가 최종 강제)
+    if (canEdit) {
+      el("masters-root").innerHTML = `<div class="m-grid"><div>${buildForm(key, cfg)}</div><div>${buildTable(key, cfg, cache[key], true)}</div></div>`;
+      bindForm(key, cfg);
+    } else {
+      el("masters-root").innerHTML =
+        `<div class="notice-readonly">기준정보 편집은 <b>관리자</b>만 가능합니다. (조회 전용)</div>${buildTable(key, cfg, cache[key], false)}`;
+    }
     bindRootOnce();
   }
 

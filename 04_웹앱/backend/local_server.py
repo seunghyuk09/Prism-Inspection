@@ -99,6 +99,15 @@ POST_ROUTES = {
 }
 
 
+# 기준정보(마스터) 편집은 관리자 전용 — 담당자(manager)는 운영 데이터만
+MASTERS_ADMIN_ONLY = frozenset({
+    "/api/suppliers/create", "/api/suppliers/update",
+    "/api/prisms/create", "/api/prisms/update", "/api/prisms/active",
+    "/api/inspection-items/create", "/api/inspection-items/update", "/api/inspection-items/active",
+    "/api/products/create", "/api/products/update", "/api/products/active",
+})
+
+
 def log_activity(category: str, action: str, target: str = "", detail=None, operator: str = ""):
     """이력 로그 한 줄 기록(로그인은 없지만 행위는 남긴다)."""
     try:
@@ -379,6 +388,9 @@ class Handler(SimpleHTTPRequestHandler):
         # 업무 변경(POST)은 담당자 이상만 — 사용자(user)는 조회 전용
         if not user_store.is_manager_or_above(self._uid):
             return self._send_json({"ok": False, "error": "권한이 없습니다 (조회 전용 사용자)."}, status=403)
+        # 기준정보(마스터) 편집은 관리자만
+        if path in MASTERS_ADMIN_ONLY and not user_store.is_admin(self._uid):
+            return self._send_json({"ok": False, "error": "기준정보 편집은 관리자만 가능합니다."}, status=403)
         route = POST_ROUTES.get(path)
         if route is None:
             return self._send_json({"ok": False, "error": "unknown_endpoint", "path": path}, status=404)

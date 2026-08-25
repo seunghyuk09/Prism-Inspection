@@ -278,6 +278,14 @@ h4 { margin: 0 0 8px; font-size: 13px; color: var(--text-muted); }
 .foot { text-align: center; color: var(--text-muted); font-size: 12px; padding: 18px; }
 
 /* ── 집계·현황(리포트) ─────────────────────────────────── */
+/* ── 역할 기반 편집 게이팅(서버가 최종 강제, 화면은 편의) ── */
+.notice-readonly { background: var(--warning-bg); color: var(--warning-text); border: 1px solid var(--warning);
+  border-radius: 10px; padding: 10px 14px; margin-bottom: 12px; font-size: 13px; }
+/* 조회 전용(user): 데이터 입력 폼 숨김 */
+body[data-role="user"] .m-form { display: none !important; }
+body[data-role="user"] .userbar::before { content: "조회 전용"; background: var(--warning-bg); color: var(--warning-text);
+  border: 1px solid var(--warning); border-radius: 8px; padding: 3px 9px; font-size: 11px; font-weight: 700; align-self: center; }
+
 .insp-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
 .report-toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
 .rep-filter { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: var(--text-secondary); font-weight: 600; }

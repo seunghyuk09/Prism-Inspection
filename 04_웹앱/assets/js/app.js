@@ -178,6 +178,11 @@ async function initAuth() {
     el("um-id").textContent = user.id;
     el("um-role").textContent = roleKo;
     if (user.role === "admin") document.querySelectorAll(".admin-only").forEach((x) => { x.hidden = false; });
+    // 역할을 앱 전역/CSS 에 노출 → 화면 편집 게이팅(서버가 최종 강제)
+    document.body.dataset.role = user.role;
+    App.role = user.role;
+    App.isAdmin = user.role === "admin";
+    App.canEdit = user.role !== "user";   // 담당자·관리자만 편집
   }
 
   // 드롭다운 토글 + 바깥 클릭 시 닫기
