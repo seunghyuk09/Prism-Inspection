@@ -147,6 +147,33 @@ def _wb_bytes(wb):
     return buf.getvalue()
 
 
+def _disp_len(v) -> int:
+    """표시 폭(한글/CJK 는 2칸으로 계산)."""
+    s = "" if v is None else str(v)
+    return sum(2 if ord(ch) > 0x2E7F else 1 for ch in s)
+
+
+def autofit(ws, min_w=6, max_w=60, pad=2):
+    """열 너비를 내용 길이에 맞춤. 가로 병합 셀은 스팬 열에 나눠 반영(제목이 열을 부풀리지 않게)."""
+    from openpyxl.utils import get_column_letter
+    merges = list(ws.merged_cells.ranges)
+    widths = {}
+    for row in ws.iter_rows():
+        for c in row:
+            if c.value is None:      # 병합 비앵커/빈칸 제외
+                continue
+            lo, hi = c.column, c.column
+            for m in merges:
+                if m.min_row <= c.row <= m.max_row and m.min_col <= c.column <= m.max_col:
+                    lo, hi = m.min_col, m.max_col
+                    break
+            share = _disp_len(c.value) / (hi - lo + 1)
+            for col in range(lo, hi + 1):
+                widths[col] = max(widths.get(col, 0), share)
+    for col, w in widths.items():
+        ws.column_dimensions[get_column_letter(col)].width = max(min_w, min(max_w, w + pad))
+
+
 def _style_header(ws, cells, fill="D9E1F2"):
     from openpyxl.styles import Font, PatternFill, Alignment
     for c in cells:
@@ -276,6 +303,7 @@ def lot_excel(lot_id, label=None):
     sect("종합")
     kv("최종 양품", d.get("final_good"), "수율(%)", _rate(d.get("final_good") or 0, L.get("lot_qty", 0)))
 
+    autofit(ws)   # 텍스트 길이에 맞춰 열 너비 자동
     return _wb_bytes(wb), f"검사이력_{disp}.xlsx"
 
 
@@ -333,8 +361,7 @@ def report_excel(data=None, product=None):
              for b in s["by_lot"]]
     t1 = "입고일별 검사 집계" + (f" — 품목 {s['product']}" if tag else "")
     styled_sheet(ws1, t1, h1, rows1, good_idx={4, 7}, bad_idx={5, 6}, num_idx={3, 4, 5, 6, 7, 8})
-    for col, w in zip("ABCDEFGHI", [13, 22, 12, 11, 11, 11, 14, 11, 10]):
-        ws1.column_dimensions[col].width = w
+    autofit(ws1)
 
     # ② 공급사별
     ws2 = wb.create_sheet("공급사별")
@@ -342,8 +369,7 @@ def report_excel(data=None, product=None):
     rows2 = [[b["supplier_name"], b["received"], b["inspected"], b["good"], b["defect"], b["defect_rate"]]
              for b in s["by_supplier"]]
     styled_sheet(ws2, "공급사별 집계", h2, rows2, good_idx={3}, bad_idx={4}, num_idx={1, 2, 3, 4, 5})
-    for col, w in zip("ABCDEF", [16, 12, 12, 11, 11, 12]):
-        ws2.column_dimensions[col].width = w
+    autofit(ws2)
 
     # ③ 입고검사 불량 (투명·원자재 프리즘) — 입고 적용 항목만
     ws3 = wb.create_sheet("입고검사불량")
@@ -351,8 +377,7 @@ def report_excel(data=None, product=None):
     rows3 = [[b["name"], b["category"], b["inc_defect"], b["inc_rate"]]
              for b in s["by_item"] if b.get("for_incoming")]
     styled_sheet(ws3, "입고검사 불량 (투명·원자재 프리즘)", h3, rows3, bad_idx={2}, num_idx={2, 3})
-    for col, w in zip("ABCD", [16, 12, 11, 15]):
-        ws3.column_dimensions[col].width = w
+    autofit(ws3)
 
     # ④ 페인트후 불량 (도장완료 프리즘) — 페인트후 적용 항목만
     ws4 = wb.create_sheet("페인트후불량")
@@ -360,7 +385,6 @@ def report_excel(data=None, product=None):
     rows4 = [[b["name"], b["category"], b["post_defect"], b["post_rate"]]
              for b in s["by_item"] if b.get("for_post_paint")]
     styled_sheet(ws4, "페인트후 불량 (도장완료 프리즘)", h4, rows4, bad_idx={2}, num_idx={2, 3})
-    for col, w in zip("ABCD", [16, 12, 13, 16]):
-        ws4.column_dimensions[col].width = w
+    autofit(ws4)
 
     return _wb_bytes(wb), f"프리즘_집계{tag}.xlsx"
