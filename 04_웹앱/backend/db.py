@@ -280,6 +280,26 @@ CREATE TABLE IF NOT EXISTS unusable_stock (
     FOREIGN KEY (prism_id) REFERENCES prism_master(id)
 );
 
+-- 도장완료 페인트후 불량(품목 레벨 일괄) — 우경 반납일별 집계. 로트 무관.
+CREATE TABLE IF NOT EXISTS paint_batch (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    prism_id      INTEGER NOT NULL,                       -- 도장완료(PAINTED) 프리즘
+    batch_date    TEXT NOT NULL,                          -- 반납/검사일
+    good_qty      INTEGER NOT NULL DEFAULT 0,
+    defect_qty    INTEGER NOT NULL DEFAULT 0,
+    note          TEXT,
+    created_at    TEXT NOT NULL,
+    FOREIGN KEY (prism_id) REFERENCES prism_master(id)
+);
+CREATE TABLE IF NOT EXISTS paint_batch_defect (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    batch_id            INTEGER NOT NULL,
+    inspection_item_id  INTEGER NOT NULL,
+    defect_qty          INTEGER NOT NULL DEFAULT 0,
+    FOREIGN KEY (batch_id) REFERENCES paint_batch(id),
+    FOREIGN KEY (inspection_item_id) REFERENCES inspection_item(id)
+);
+
 -- 행위/이력 로그: 로그인은 없지만 '누가(operator) 언제 무엇을' 기록(기록 신뢰성).
 CREATE TABLE IF NOT EXISTS activity_log (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -312,10 +332,15 @@ def _split_sql(script: str) -> list:
 
 
 class _PgCursor:
-    """psycopg 커서를 sqlite3 커서처럼(iter/fetch/lastrowid)."""
+    """psycopg 커서를 sqlite3 커서처럼(iter/fetch/lastrowid/rowcount)."""
     def __init__(self, cur):
         self._cur = cur
         self.lastrowid = None
+        # UPDATE/DELETE 영향행수(서비스가 cur.rowcount 로 존재여부 판단) — psycopg 커서가 제공
+        try:
+            self.rowcount = cur.rowcount
+        except Exception:  # noqa: BLE001
+            self.rowcount = -1
 
     def fetchone(self):
         return self._cur.fetchone()

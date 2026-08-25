@@ -5,6 +5,7 @@
 window.Plan = (function () {
   const { get, post, el, esc, toast } = App;
   let fileB64 = null, filename = "", plans = [], bound = false;
+  let ledgerB64 = null;
   const n = (v) => Number(v || 0).toLocaleString();
 
   function readFile(file) {
@@ -66,6 +67,27 @@ window.Plan = (function () {
     el("plan-list").innerHTML = plansTable();
   }
 
+  // ── ERP 수불부 소모 임포트 ────────────────────────────────
+  async function doLedgerPreview(prismId) {
+    if (!ledgerB64) return toast("엑셀 파일을 선택하세요.", "warn");
+    const body = { content: ledgerB64 };
+    if (prismId) body.prism_id = prismId;
+    const r = await post("/api/ledger/preview", body);
+    const box = el("ledger-preview");
+    if (!r.ok) { box.innerHTML = `<div class="muted">${esc(r.error || "")}</div>`; return; }
+    const s = r.summary;
+    const prismOpts = (r.prisms || []).map((p) => `<option value="${p.id}" ${p.id === r.prism_id ? "selected" : ""}>${esc(p.item_code)} · ${esc(p.spec || "")}</option>`).join("");
+    const rows = r.lines.map((l) =>
+      `<tr${l.status === "DUP" ? ' style="opacity:.5"' : ""}><td>${esc(l.date)}</td><td class="right">${n(l.qty)}</td><td>${esc(l.product)}</td>
+        <td>${l.status === "NEW" ? '<span class="pill active">신규</span>' : '<span class="pill">이미있음</span>'}</td></tr>`).join("");
+    box.innerHTML = `
+      <label class="field" style="max-width:460px;margin-top:8px"><span>소비 대상 도장완료 프리즘</span><select id="ledger-prism">${prismOpts}</select></label>
+      <div class="insp-head">소모 ${s.total}건 · <b style="color:var(--success-text)">신규 ${s.new}</b> · 이미있음 ${s.dup} · <b>신규 소비 ${n(s.consumed)}</b></div>
+      <div class="form-actions" style="margin:8px 0 12px"><button class="btn primary" id="ledger-commit" type="button" ${s.new ? "" : "disabled"}>신규 소비 등록</button></div>
+      <div class="tbl-scroll"><table class="tbl"><thead><tr><th>일자</th><th class="right">소모수량</th><th>적요(제품)</th><th>상태</th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="4" class="muted">소모(출고) 줄 없음</td></tr>'}</tbody></table></div>`;
+  }
+
   async function render() {
     plans = (await get("/api/plans")).items || [];   // 먼저 데이터 로드(아직 #plan-list 없음)
     el("plan-root").innerHTML = `
@@ -75,7 +97,17 @@ window.Plan = (function () {
         <span class="muted" id="plan-fname" style="margin-left:8px"></span>
       </div>
       <div class="card-surface" id="plan-preview"><div class="muted">파일을 선택하면 미리보기가 표시됩니다.</div></div>
-      <div class="card-surface"><h4>임포트된 계획</h4><div id="plan-list">${plansTable()}</div></div>`;
+      <div class="card-surface"><h4>임포트된 계획</h4><div id="plan-list">${plansTable()}</div></div>
+
+      <div class="card-surface">
+        <h4>ERP 수불부 소모 임포트 (.xlsx)</h4>
+        <p class="sub">ECount 재고수불부를 올리면 '소모(출고)' 줄이 선택한 도장완료 프리즘의 소비로 등록됩니다. 이미 등록된(같은 일자·수량) 건은 자동 건너뜁니다.</p>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <input type="file" id="ledger-file" accept=".xlsx" />
+          <button class="btn" id="ledger-preview-btn" type="button">미리보기</button>
+        </div>
+        <div id="ledger-preview"><div class="muted">파일을 선택하고 미리보기를 누르세요.</div></div>
+      </div>`;
     bindOnce();
   }
 
@@ -91,6 +123,12 @@ window.Plan = (function () {
         await doPreview();
       } else if (e.target.id === "plan-sheet") {
         await doPreview(e.target.value);
+      } else if (e.target.id === "ledger-file") {
+        const f = e.target.files[0]; if (!f) return;
+        ledgerB64 = await readFile(f);
+        el("ledger-preview").innerHTML = '<div class="muted">"미리보기"를 누르세요.</div>';
+      } else if (e.target.id === "ledger-prism") {
+        await doLedgerPreview(Number(e.target.value));   // 대상 프리즘 바뀌면 중복판정 갱신
       }
     });
     root.addEventListener("click", async (e) => {
@@ -107,6 +145,16 @@ window.Plan = (function () {
       if (del) {
         const r = await post("/api/plan/delete", { id: Number(del.dataset.id) });
         if (r.ok) { toast("계획 취소(소비 되돌림)", "ok"); await refreshPlans(); } else toast(r.error || "실패", "warn");
+        return;
+      }
+      if (e.target.id === "ledger-preview-btn") {
+        const sel = el("ledger-prism");
+        return doLedgerPreview(sel ? Number(sel.value) : undefined);
+      }
+      if (e.target.id === "ledger-commit") {
+        const r = await post("/api/ledger/commit", { content: ledgerB64, prism_id: Number(el("ledger-prism").value) });
+        if (r.ok) { toast(`소비 등록 ${r.created}건 (건너뜀 ${r.skipped}) · 총 ${n(r.consumed)}`, "ok"); await doLedgerPreview(Number(el("ledger-prism").value)); }
+        else toast(r.error || "실패", "warn");
       }
     });
   }

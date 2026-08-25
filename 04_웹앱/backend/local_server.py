@@ -33,6 +33,8 @@ import inspection_service       # noqa: E402
 import paint_service            # noqa: E402
 import stock_service            # noqa: E402
 import plan_service             # noqa: E402
+import paint_batch_service       # noqa: E402
+import ledger_service            # noqa: E402
 import report_service           # noqa: E402
 import auth                      # noqa: E402
 
@@ -59,6 +61,8 @@ GET_LIST_ROUTES = {
     "/api/receipts":         receipt_service.list_all,
     "/api/inspection/lots":  inspection_service.list_lots,
     "/api/plans":            plan_service.list_plans,
+    "/api/painted-prisms":   paint_batch_service.painted_prisms,
+    "/api/paint-batches":    paint_batch_service.list_batches,
 }
 
 # ── POST 액션 라우트: path → (서비스함수, 분류, 동작) ─────────
@@ -86,6 +90,12 @@ POST_ROUTES = {
     "/api/plan/preview":            (plan_service.preview,           "구매계획", "미리보기"),
     "/api/plan/commit":             (plan_service.commit,            "구매계획", "확정"),
     "/api/plan/delete":             (plan_service.delete_plan,       "구매계획", "취소"),
+    "/api/paint-batch/save":        (paint_batch_service.save,       "페인트후", "저장"),
+    "/api/paint-batch/delete":      (paint_batch_service.delete,     "페인트후", "삭제"),
+    "/api/paint-batch/preview":     (paint_batch_service.preview_excel, "페인트후", "미리보기"),
+    "/api/paint-batch/commit":      (paint_batch_service.commit_excel,  "페인트후", "업로드"),
+    "/api/ledger/preview":          (ledger_service.preview,         "수불부", "미리보기"),
+    "/api/ledger/commit":           (ledger_service.commit,          "수불부", "확정"),
 }
 
 

@@ -67,6 +67,23 @@ function selectItem(catIdx, itemIdx) {
   showPanel(it.panel, it.sub);
 }
 
+// 다른 화면(버튼 등)에서 특정 패널로 이동 — 메뉴 하이라이트까지 맞춤(단일 렌더)
+window.navTo = function (panel, sub) {
+  for (let ci = 0; ci < NAV.length; ci++) {
+    const nv = NAV[ci];
+    if (nv.items) {
+      const ii = nv.items.findIndex((it) => it.panel === panel && (sub == null || it.sub === sub));
+      if (ii >= 0) {
+        document.querySelectorAll(".menu-category-button").forEach((b, i) => b.classList.toggle("active", i === ci));
+        renderSubnav(ci);
+        selectItem(ci, ii);   // 한 번만 렌더(selectCategory 의 자동 item0 선택 회피 → 경쟁 방지)
+        return true;
+      }
+    } else if (nv.panel === panel) { selectCategory(ci); return true; }
+  }
+  return false;
+};
+
 // 카테고리바 + 홈카드 생성
 function buildMenu() {
   el("category-bar").innerHTML = NAV.map((n, i) =>

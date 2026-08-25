@@ -93,6 +93,14 @@ def summary(data=None, product=None) -> dict:
         post_total = conn.execute(
             "SELECT COALESCE(SUM(inc.inspected_qty),0) s FROM inspection inc " + _insp_join +
             "WHERE inc.stage='POST_PAINT'" + lot_filter, lp).fetchone()["s"]
+        # 도장완료 페인트후 배치(품목 레벨) — 선택 품목의 도장완료 프리즘만.
+        # LEFT JOIN 팬아웃(도장완료 코드에 RAW 다수 매핑 시 이중합산) 방지: IN 서브쿼리로 필터.
+        batch_where = (" AND pb.prism_id IN (SELECT painted_into_id FROM prism_master "
+                       "WHERE item_code=? AND painted_into_id IS NOT NULL)") if product else ""
+        bp = [product] if product else []
+        post_total += conn.execute(
+            "SELECT COALESCE(SUM(pb.good_qty+pb.defect_qty),0) s FROM paint_batch pb "
+            "WHERE 1=1" + batch_where, bp).fetchone()["s"]
         items = conn.execute("SELECT id,name,category,applies_to_incoming,applies_to_post_paint "
                               "FROM inspection_item ORDER BY sort_order,id").fetchall()
         _def_join = "JOIN inspection i ON i.id=idf.inspection_id JOIN lot l ON l.id=i.lot_id JOIN receipt r ON r.id=l.receipt_id JOIN prism_master pm ON pm.id=r.prism_id "
@@ -104,6 +112,10 @@ def summary(data=None, product=None) -> dict:
             post_def = conn.execute(
                 "SELECT COALESCE(SUM(idf.defect_qty),0) s FROM inspection_defect idf " + _def_join +
                 "WHERE i.stage='POST_PAINT' AND idf.inspection_item_id=?" + lot_filter, [it["id"]] + lp).fetchone()["s"]
+            post_def += conn.execute(
+                "SELECT COALESCE(SUM(pbd.defect_qty),0) s FROM paint_batch_defect pbd "
+                "JOIN paint_batch pb ON pb.id=pbd.batch_id "
+                "WHERE pbd.inspection_item_id=?" + batch_where, [it["id"]] + bp).fetchone()["s"]
             by_item.append({
                 "name": it["name"], "category": it["category"],
                 "for_incoming": bool(it["applies_to_incoming"]), "for_post_paint": bool(it["applies_to_post_paint"]),

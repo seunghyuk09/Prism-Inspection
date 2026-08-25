@@ -143,6 +143,7 @@ window.Inspection = (function () {
     const root = rootOf(stage);
 
     root.addEventListener("click", async (e) => {
+      if (e.target.closest(`#edit-items-${stage}`)) { if (window.navTo) window.navTo("masters", "item"); return; }
       const tr = e.target.closest("tr.clickable");
       if (tr) { selected[stage] = Number(tr.dataset.id); el("list-" + stage).innerHTML = lotListHtml(stage); await renderDetail(stage, selected[stage]); }
     });
@@ -185,12 +186,21 @@ window.Inspection = (function () {
   }
 
   // ── 진입점: app.js 가 단계별로 호출 ──────────────────────
+  function toolbarHtml(stage) {
+    if (stage !== "INCOMING" && stage !== "POST_PAINT") return "";
+    return `<div class="insp-toolbar">
+      <button class="btn" id="edit-items-${stage}" type="button">🛠 검사항목 편집</button>
+      <span class="muted">불량 항목 추가·이름 수정·단계 적용은 기준정보 &gt; 검사항목에서</span></div>`;
+  }
+
   async function showStage(stage) {
     lots = (await get("/api/inspection/lots")).items || [];
     const root = rootOf(stage);
-    root.innerHTML = `<div class="m-grid"><div class="card-surface" id="list-${stage}">${lotListHtml(stage)}</div>
-      <div id="detail-${stage}"><div class="muted">왼쪽에서 로트를 선택하세요.</div></div></div>`;
+    const extra = stage === "POST_PAINT" && window.PaintBatch ? window.PaintBatch.sectionHtml() : "";
+    root.innerHTML = toolbarHtml(stage) + `<div class="m-grid"><div class="card-surface" id="list-${stage}">${lotListHtml(stage)}</div>
+      <div id="detail-${stage}"><div class="muted">왼쪽에서 로트를 선택하세요.</div></div></div>` + extra;
     bindStage(stage);
+    if (stage === "POST_PAINT" && window.PaintBatch) window.PaintBatch.mount(root);
     // 선택값이 더 이상 대상이 아니면 해제
     if (selected[stage] && !lots.some((l) => l.id === selected[stage] && eligible(stage, l))) selected[stage] = null;
     if (selected[stage]) await renderDetail(stage, selected[stage]);
