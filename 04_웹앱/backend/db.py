@@ -46,6 +46,19 @@ PG_SCHEMA = (os.environ.get("PG_SCHEMA") or _DBENV.get("PG_SCHEMA") or "prism").
 SCHEMA_PG_FILE = ROOT / "08_배포" / "schema_postgres.sql"
 
 
+def db_info() -> dict:
+    """상태 표시용 DB 설명(비밀번호 제외). 실제 백엔드(PG/SQLite)를 반영."""
+    if IS_PG:
+        def g(k):
+            m = re.search(rf"\b{k}=(\S+)", DATABASE_URL)
+            return m.group(1) if m else ""
+        host = g("host") or "localhost"
+        port = g("port") or "5432"
+        dbn = g("dbname") or "prism"
+        return {"kind": "PostgreSQL", "desc": f"{host}:{port}/{dbn} · 스키마 {PG_SCHEMA}"}
+    return {"kind": "SQLite", "desc": str(DB_PATH)}
+
+
 def now_str() -> str:
     """현재시각 문자열(기록용)."""
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")

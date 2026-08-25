@@ -145,8 +145,9 @@ function initTheme() {
 async function loadDashboard() {
   try {
     const st = await apiGet("/api/status");
-    el("env-info").textContent = `포트 ${st.port} · DB ${st.db_exists ? "정상" : "없음"} · ${st.time}`;
-    el("foot").textContent = `${st.app} · 로컬 전용 · DB: ${st.db_path}`;
+    const dbk = st.db_kind || "DB";
+    el("env-info").textContent = `포트 ${st.port} · ${dbk} ${st.db_exists ? "정상" : "연결실패"} · ${st.time}`;
+    el("foot").textContent = `${st.app} · DB: ${dbk}${st.db_desc ? " (" + st.db_desc + ")" : ""}`;
   } catch (e) { el("env-info").textContent = "서버 연결 실패"; }
 
   try {

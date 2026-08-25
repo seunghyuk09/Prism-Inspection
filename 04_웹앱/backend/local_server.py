@@ -285,11 +285,18 @@ class Handler(SimpleHTTPRequestHandler):
     def _route_get(self, path):
         try:
             if path == "/api/status":
+                info = db.db_info()
+                try:
+                    c = db.connect(); c.execute("SELECT 1"); c.close(); alive = True
+                except Exception:  # noqa: BLE001
+                    alive = False
                 return self._send_json({
                     "app": "Prism 검사·재고 관리",
                     "port": self.server.server_address[1],
-                    "db_path": str(db.DB_PATH),
-                    "db_exists": db.DB_PATH.exists(),
+                    "db_kind": info["kind"],       # PostgreSQL / SQLite
+                    "db_desc": info["desc"],       # 호스트:포트/DB (비밀번호 제외)
+                    "db_path": str(db.DB_PATH),    # (하위호환)
+                    "db_exists": alive,            # 실제 연결 확인
                     "time": db.now_str(),
                 })
             if path == "/api/health":
