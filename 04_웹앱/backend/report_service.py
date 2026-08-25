@@ -183,14 +183,13 @@ def lot_excel(lot_id, label=None):
         ws.column_dimensions[col].width = 15
 
     FONT = "맑은 고딕"
-    thin = Side(style="thin", color="8AA0C8")
+    thin = Side(style="thin", color="595959")   # 진한 회색 — 확실히 보이는 테두리
     BORDER = Border(left=thin, right=thin, top=thin, bottom=thin)
     FILL_SECT = PatternFill("solid", fgColor="D9E1F2")   # 섹션 제목
     FILL_LABEL = PatternFill("solid", fgColor="EEF2FA")   # 라벨
     FILL_HEAD = PatternFill("solid", fgColor="F3F6FC")   # 표 헤더
     C = Alignment(horizontal="center", vertical="center")
-    LFT = Alignment(horizontal="left", vertical="center")
-    RGT = Alignment(horizontal="right", vertical="center")
+    LFT = RGT = C   # 전체 가운데 정렬로 통일(요청)
     MAXC = 6  # A..F
 
     def cell(coord, val=None, bold=False, size=10, fill=None, align=LFT):
@@ -291,7 +290,7 @@ def report_excel(data=None, product=None):
     wb = openpyxl.Workbook()
 
     FONT = "맑은 고딕"
-    thin = Side(style="thin", color="9BB0D6")
+    thin = Side(style="thin", color="595959")   # 진한 회색 — 확실히 보이는 테두리
     BORDER = Border(left=thin, right=thin, top=thin, bottom=thin)
     F_TITLE = PatternFill("solid", fgColor="305496")   # 진파랑(제목)
     F_HEAD = PatternFill("solid", fgColor="4472C4")    # 파랑(헤더)
@@ -319,7 +318,7 @@ def report_excel(data=None, product=None):
             for ci, val in enumerate(row, 1):
                 cc = ws.cell(ri, ci, val)
                 cc.font = Font(name=FONT); cc.border = BORDER
-                cc.alignment = RGT if (ci - 1) in num_idx else LFT
+                cc.alignment = C   # 전체 가운데 정렬
                 if (ci - 1) in good_idx:
                     cc.fill = F_GOOD
                 elif (ci - 1) in bad_idx:
