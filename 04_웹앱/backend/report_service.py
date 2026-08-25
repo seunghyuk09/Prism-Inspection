@@ -183,7 +183,7 @@ def lot_excel(lot_id, label=None):
         ws.column_dimensions[col].width = 15
 
     FONT = "맑은 고딕"
-    thin = Side(style="thin", color="595959")   # 진한 회색 — 확실히 보이는 테두리
+    thin = Side(style="thin", color="000000")   # 검정 — 일반 '모든 테두리' 와 동일
     BORDER = Border(left=thin, right=thin, top=thin, bottom=thin)
     FILL_SECT = PatternFill("solid", fgColor="D9E1F2")   # 섹션 제목
     FILL_LABEL = PatternFill("solid", fgColor="EEF2FA")   # 라벨
@@ -290,7 +290,7 @@ def report_excel(data=None, product=None):
     wb = openpyxl.Workbook()
 
     FONT = "맑은 고딕"
-    thin = Side(style="thin", color="595959")   # 진한 회색 — 확실히 보이는 테두리
+    thin = Side(style="thin", color="000000")   # 검정 — 일반 '모든 테두리' 와 동일
     BORDER = Border(left=thin, right=thin, top=thin, bottom=thin)
     F_TITLE = PatternFill("solid", fgColor="305496")   # 진파랑(제목)
     F_HEAD = PatternFill("solid", fgColor="4472C4")    # 파랑(헤더)
