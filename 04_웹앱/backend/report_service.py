@@ -93,7 +93,8 @@ def summary(data=None, product=None) -> dict:
         post_total = conn.execute(
             "SELECT COALESCE(SUM(inc.inspected_qty),0) s FROM inspection inc " + _insp_join +
             "WHERE inc.stage='POST_PAINT'" + lot_filter, lp).fetchone()["s"]
-        items = conn.execute("SELECT id,name,category FROM inspection_item ORDER BY sort_order,id").fetchall()
+        items = conn.execute("SELECT id,name,category,applies_to_incoming,applies_to_post_paint "
+                              "FROM inspection_item ORDER BY sort_order,id").fetchall()
         _def_join = "JOIN inspection i ON i.id=idf.inspection_id JOIN lot l ON l.id=i.lot_id JOIN receipt r ON r.id=l.receipt_id JOIN prism_master pm ON pm.id=r.prism_id "
         by_item = []
         for it in items:
@@ -105,6 +106,7 @@ def summary(data=None, product=None) -> dict:
                 "WHERE i.stage='POST_PAINT' AND idf.inspection_item_id=?" + lot_filter, [it["id"]] + lp).fetchone()["s"]
             by_item.append({
                 "name": it["name"], "category": it["category"],
+                "for_incoming": bool(it["applies_to_incoming"]), "for_post_paint": bool(it["applies_to_post_paint"]),
                 "inc_defect": inc_def, "inc_rate": _rate(inc_def, inc_total),
                 "post_defect": post_def, "post_rate": _rate(post_def, post_total),
             })
@@ -332,13 +334,22 @@ def report_excel(data=None, product=None):
     for col, w in zip("ABCDEF", [16, 12, 12, 11, 11, 12]):
         ws2.column_dimensions[col].width = w
 
-    # ③ 검사항목별
-    ws3 = wb.create_sheet("검사항목별")
-    h3 = ["검사항목", "분류", "입고불량", "입고불량률(%)", "페인트후불량", "페인트후불량률(%)"]
-    rows3 = [[b["name"], b["category"], b["inc_defect"], b["inc_rate"], b["post_defect"], b["post_rate"]]
-             for b in s["by_item"]]
-    styled_sheet(ws3, "검사항목별 불량", h3, rows3, bad_idx={2, 4}, num_idx={2, 3, 4, 5})
-    for col, w in zip("ABCDEF", [16, 10, 11, 15, 13, 17]):
+    # ③ 입고검사 불량 (투명·원자재 프리즘) — 입고 적용 항목만
+    ws3 = wb.create_sheet("입고검사불량")
+    h3 = ["검사항목", "분류", "입고불량", "입고불량률(%)"]
+    rows3 = [[b["name"], b["category"], b["inc_defect"], b["inc_rate"]]
+             for b in s["by_item"] if b.get("for_incoming")]
+    styled_sheet(ws3, "입고검사 불량 (투명·원자재 프리즘)", h3, rows3, bad_idx={2}, num_idx={2, 3})
+    for col, w in zip("ABCD", [16, 12, 11, 15]):
         ws3.column_dimensions[col].width = w
+
+    # ④ 페인트후 불량 (도장완료 프리즘) — 페인트후 적용 항목만
+    ws4 = wb.create_sheet("페인트후불량")
+    h4 = ["검사항목", "분류", "페인트후불량", "페인트후불량률(%)"]
+    rows4 = [[b["name"], b["category"], b["post_defect"], b["post_rate"]]
+             for b in s["by_item"] if b.get("for_post_paint")]
+    styled_sheet(ws4, "페인트후 불량 (도장완료 프리즘)", h4, rows4, bad_idx={2}, num_idx={2, 3})
+    for col, w in zip("ABCD", [16, 12, 13, 16]):
+        ws4.column_dimensions[col].width = w
 
     return _wb_bytes(wb), f"프리즘_집계{tag}.xlsx"

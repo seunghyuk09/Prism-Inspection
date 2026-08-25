@@ -114,12 +114,20 @@ window.Report = (function () {
       <tbody>${rows || '<tr><td colspan="5" class="muted">없음</td></tr>'}</tbody></table>`;
   }
 
-  function itemTable() {
-    const rows = (data.by_item || []).map((b) =>
-      `<tr><td>${esc(b.name)}</td><td class="right bad-t">${n(b.inc_defect)} <span class="muted">(${pct(b.inc_rate)})</span></td>
-        <td class="right">${n(b.post_defect)} <span class="muted">(${pct(b.post_rate)})</span></td></tr>`).join("");
-    return `<table class="tbl"><thead><tr><th>검사항목</th><th class="right">입고검사 불량(률)</th><th class="right">페인트후 불량(률)</th></tr></thead>
-      <tbody>${rows || '<tr><td colspan="3" class="muted">없음</td></tr>'}</tbody></table>`;
+  // 입고검사(투명·원자재 프리즘) — 입고 적용 항목만
+  function incomingItemTable() {
+    const rows = (data.by_item || []).filter((b) => b.for_incoming).map((b) =>
+      `<tr><td>${esc(b.name)}</td><td class="right bad-t">${n(b.inc_defect)} <span class="muted">(${pct(b.inc_rate)})</span></td></tr>`).join("");
+    return `<table class="tbl"><thead><tr><th>검사항목</th><th class="right">불량(률)</th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="2" class="muted">없음</td></tr>'}</tbody></table>`;
+  }
+
+  // 페인트후(도장완료 프리즘) — 페인트후 적용 항목만
+  function postPaintItemTable() {
+    const rows = (data.by_item || []).filter((b) => b.for_post_paint).map((b) =>
+      `<tr><td>${esc(b.name)}</td><td class="right bad-t">${n(b.post_defect)} <span class="muted">(${pct(b.post_rate)})</span></td></tr>`).join("");
+    return `<table class="tbl"><thead><tr><th>검사항목</th><th class="right">불량(률)</th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="2" class="muted">페인트후 검사 기록 없음</td></tr>'}</tbody></table>`;
   }
 
   // ── 렌더(데이터 캐시 기반, 테마 전환 시 재사용) ────────────
@@ -177,9 +185,11 @@ window.Report = (function () {
 
       <div class="card-surface" style="margin-top:16px"><h4>로트별 집계 <span class="muted" style="font-weight:400;font-size:12px">건별 엑셀 다운로드</span></h4>${lotTable()}</div>
 
+      <div class="card-surface" style="margin-top:16px"><h4>공급사별</h4>${supplierTable()}</div>
+
       <div class="grid2" style="margin-top:16px">
-        <div class="card-surface"><h4>공급사별</h4>${supplierTable()}</div>
-        <div class="card-surface"><h4>검사항목별 불량률 <span class="muted" style="font-weight:400;font-size:12px">단계 분리</span></h4>${itemTable()}</div>
+        <div class="card-surface"><h4>입고검사 불량 <span class="muted" style="font-weight:400;font-size:12px">투명·원자재 프리즘</span></h4>${incomingItemTable()}</div>
+        <div class="card-surface"><h4>페인트후 불량 <span class="muted" style="font-weight:400;font-size:12px">도장완료 프리즘</span></h4>${postPaintItemTable()}</div>
       </div>`;
   }
 
