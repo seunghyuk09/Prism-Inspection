@@ -35,6 +35,7 @@ import stock_service            # noqa: E402
 import plan_service             # noqa: E402
 import paint_batch_service       # noqa: E402
 import ledger_service            # noqa: E402
+import log_service               # noqa: E402
 import report_service           # noqa: E402
 import auth                      # noqa: E402
 
@@ -63,6 +64,7 @@ GET_LIST_ROUTES = {
     "/api/plans":            plan_service.list_plans,
     "/api/painted-prisms":   paint_batch_service.painted_prisms,
     "/api/paint-batches":    paint_batch_service.list_batches,
+    "/api/logs":             log_service.list_logs,
 }
 
 # ── POST 액션 라우트: path → (서비스함수, 분류, 동작) ─────────

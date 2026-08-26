@@ -41,6 +41,7 @@ function showPanel(name, sub) {
   if (name === "plan" && window.Plan) window.Plan.show();
   if (name === "stock" && window.Stock) window.Stock.show();
   if (name === "report") { if (window.Report) window.Report.show(); loadDashboard(); }
+  if (name === "log" && window.Log) window.Log.show();
   if (name === "users" && window.UsersAdmin) window.UsersAdmin.show();
 }
 
