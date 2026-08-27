@@ -326,6 +326,53 @@ body[data-role="user"] .userbar::before { content: "조회 전용"; background: 
 .tbl tbody td.good-t, td.good-t { color: var(--success-text); font-weight: 600; }
 .tbl tbody td.bad-t, td.bad-t { color: var(--danger-text); font-weight: 600; }
 .tbl tbody td.good-t .muted, .tbl tbody td.bad-t .muted { font-weight: 400; }
+
+/* ── 모바일 최적화 (≤640px) ────────────────────────────── */
+@media (max-width: 640px) {
+  body { font-size: 15px; }
+  .topbar { padding: 9px 12px; }
+  .brand .logo { font-size: 15px; }
+  .brand .title { font-size: 12px; }
+  .env { display: none; }                      /* 상태 문구 숨겨 공간 확보 */
+  .userbar { gap: 8px; }
+
+  /* 메뉴: 한 줄 가로 스크롤(스와이프) */
+  .menu-category-bar { padding: 8px 10px 0; gap: 4px; flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .menu-subnav { padding: 8px 10px; gap: 4px; flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .menu-category-button, .menu-subnav-button { white-space: nowrap; flex: 0 0 auto; }
+  .menu-category-button { padding: 8px 13px; font-size: 13px; }
+
+  #main { padding: 12px 10px; }
+  .panel > h2 { font-size: 17px; }
+  .panel > .sub { font-size: 12px; margin-bottom: 12px; }
+
+  /* 넓은 표/내용은 카드 안에서 가로 스크롤 */
+  .card-surface { padding: 13px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .tbl-scroll { -webkit-overflow-scrolling: touch; }
+  .tbl th, .tbl td { padding: 8px; font-size: 13px; white-space: nowrap; }
+
+  /* 그리드는 한 열로 */
+  .grid2, .grid2-tight, .m-grid { grid-template-columns: 1fr; gap: 12px; }
+  .stat-row { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .stat-card .sv { font-size: 20px; }
+
+  /* 터치 타깃 확대 */
+  .field input, .field select, .field textarea { padding: 11px 12px; font-size: 15px; }
+  .rep-filter select { min-width: 0; width: 100%; padding: 11px 12px; font-size: 15px; }
+  .rep-filter { width: 100%; }
+  .btn { padding: 11px 16px; font-size: 14px; }
+  .mini { padding: 7px 10px; }
+  .report-toolbar, .insp-toolbar { gap: 8px; }
+  .report-toolbar > .btn, .report-toolbar .rep-filter { flex: 1 1 100%; }
+
+  /* 차트/카드 */
+  .chart-flex { justify-content: center; gap: 12px; }
+  .dash-cards { gap: 8px; }
+  .dash-card { flex: 1 1 44%; }
+
+  /* 모달 폭 */
+  .modal-card { width: calc(100vw - 24px); max-width: none; }
+}
 .ybar-wrap { display: flex; align-items: center; gap: 8px; min-width: 120px; }
 .ybar { flex: 1 1 auto; height: 8px; background: var(--bg-elev-4); border-radius: 5px; overflow: hidden; }
 .ybar > span { display: block; height: 100%; background: linear-gradient(90deg, var(--accent), var(--success)); border-radius: 5px; }
