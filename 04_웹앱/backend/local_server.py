@@ -93,6 +93,7 @@ POST_ROUTES = {
     "/api/plan/commit":             (plan_service.commit,            "구매계획", "확정"),
     "/api/plan/delete":             (plan_service.delete_plan,       "구매계획", "취소"),
     "/api/paint-batch/save":        (paint_batch_service.save,       "페인트후", "저장"),
+    "/api/paint-batch/update":      (paint_batch_service.update,     "페인트후", "수정"),
     "/api/paint-batch/delete":      (paint_batch_service.delete,     "페인트후", "삭제"),
     "/api/paint-batch/preview":     (paint_batch_service.preview_excel, "페인트후", "미리보기"),
     "/api/paint-batch/commit":      (paint_batch_service.commit_excel,  "페인트후", "업로드"),

@@ -71,7 +71,7 @@ def list_batches(data=None) -> list[dict]:
         out = []
         for r in rows:
             defs = conn.execute(
-                "SELECT ii.name, pbd.defect_qty FROM paint_batch_defect pbd "
+                "SELECT ii.id AS item_id, ii.name, pbd.defect_qty FROM paint_batch_defect pbd "
                 "JOIN inspection_item ii ON ii.id=pbd.inspection_item_id WHERE pbd.batch_id=? ORDER BY pbd.id",
                 (r["id"],)).fetchall()
             d = dict(r)
@@ -116,6 +116,44 @@ def save(data: dict) -> dict:
                          (bid, iid, q))
         conn.commit()
         return {"ok": True, "batch_id": bid, "good_qty": good_qty, "defect_qty": dq}
+    finally:
+        conn.close()
+
+
+def update(data: dict) -> dict:
+    """반납일 배치 수량만 그 자리에서 수정 — {id, good_qty, defects:[{item_id,qty}], note?}.
+
+    삭제·재등록 없이 양품/불량유형별 수량을 고친다. 불량유형 목록은 통째로 교체
+    (qty 0 은 제외). 집계(페인트후 불량)에 즉시 반영된다.
+    """
+    bid = data.get("id")
+    if not bid:
+        return {"ok": False, "error": "배치 ID가 없습니다."}
+    good_qty = rules._to_int(data.get("good_qty"))
+    defects = []
+    dq = 0
+    for d in (data.get("defects") or []):
+        q = rules._to_int(d.get("qty"))
+        iid = d.get("item_id")
+        if q <= 0 or not iid:
+            continue
+        defects.append((int(iid), q))
+        dq += q
+    conn = db.connect()
+    try:
+        if not conn.execute("SELECT id FROM paint_batch WHERE id=?", (bid,)).fetchone():
+            return {"ok": False, "error": "배치를 찾을 수 없습니다."}
+        if "note" in data:
+            conn.execute("UPDATE paint_batch SET good_qty=?,defect_qty=?,note=? WHERE id=?",
+                         (good_qty, dq, (data.get("note") or "").strip(), bid))
+        else:
+            conn.execute("UPDATE paint_batch SET good_qty=?,defect_qty=? WHERE id=?", (good_qty, dq, bid))
+        conn.execute("DELETE FROM paint_batch_defect WHERE batch_id=?", (bid,))
+        for iid, q in defects:
+            conn.execute("INSERT INTO paint_batch_defect(batch_id,inspection_item_id,defect_qty) VALUES (?,?,?)",
+                         (bid, iid, q))
+        conn.commit()
+        return {"ok": True, "good_qty": good_qty, "defect_qty": dq}
     finally:
         conn.close()
 

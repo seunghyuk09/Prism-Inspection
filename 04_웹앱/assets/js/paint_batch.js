@@ -8,6 +8,7 @@ window.PaintBatch = (function () {
   const today = () => new Date().toISOString().slice(0, 10);
   let prisms = [], items = [], batches = [], fileB64 = null, selectedPrism = null;
   const pbSel = {};   // prism_id → 선택된 batch_id (검사내역 상세)
+  let editingBid = null;   // 인라인 수정 중인 batch_id (null = 조회모드)
 
   function sectionHtml() {
     return `<div class="card-surface" style="margin-top:16px" id="pb-root"><div class="muted">불러오는 중…</div></div>`;
@@ -16,6 +17,8 @@ window.PaintBatch = (function () {
   // 선택된 배치 상세(양불·불량유형) — 입고이력 상세와 동일 형식
   function pbDetail(b) {
     if (!b) return '<div class="ih-detail muted">반납일을 선택하세요.</div>';
+    const canEdit = !window.App || App.canEdit !== false;
+    if (canEdit && editingBid === b.id) return pbEditForm(b);   // 인라인 수정 모드
     const total = n2(b.good_qty) + n2(b.defect_qty);
     const rate = total ? (n2(b.defect_qty) / total * 100).toFixed(2) + "%" : "—";
     let rows;
@@ -29,7 +32,9 @@ window.PaintBatch = (function () {
     }
     return `<div class="ih-detail">
       <div class="ih-detail-head"><b>${esc(b.batch_date)}</b> 반납분 <span class="pill active">등록</span>
-        ${(window.App && App.canEdit !== false) ? `<button class="mini danger" data-act="pb-del" data-id="${b.id}" style="float:right">삭제</button>` : ""}</div>
+        ${canEdit ? `<span style="float:right;display:inline-flex;gap:6px">
+          <button class="mini" data-act="pb-edit" data-id="${b.id}">수정</button>
+          <button class="mini danger" data-act="pb-del" data-id="${b.id}">삭제</button></span>` : ""}</div>
       <div class="ih-stat-row">
         <div class="ih-stat"><span>반납수량</span><b>${n(total)}</b></div>
         <div class="ih-stat"><span>양품</span><b class="yes">${n(b.good_qty)}</b></div>
@@ -38,6 +43,31 @@ window.PaintBatch = (function () {
       </div>
       <table class="tbl ih-def"><thead><tr><th>불량유형</th><th class="right">수량</th><th>비중</th></tr></thead>
         <tbody>${rows}</tbody></table>
+    </div>`;
+  }
+
+  // 인라인 수정 폼 — 양품 + 불량유형별 수량만 그 자리에서 고침 (삭제 없이)
+  function pbEditForm(b) {
+    const cur = {};   // item_id → 현재 수량
+    (b.defects || []).forEach((d) => { if (d.item_id != null) cur[d.item_id] = n2(d.defect_qty); });
+    // 표시 항목: 활성 페인트후 검사항목 ∪ 이 배치에 이미 있는 항목(비활성 포함)
+    const seen = new Set(items.map((it) => it.id));
+    const rowItems = items.slice();
+    (b.defects || []).forEach((d) => { if (d.item_id != null && !seen.has(d.item_id)) { rowItems.push({ id: d.item_id, name: d.name }); seen.add(d.item_id); } });
+    const rows = rowItems.map((it) =>
+      `<tr><td>${esc(it.name)}</td>
+        <td class="right"><input type="number" min="0" class="pb-edit-def" data-item="${it.id}" value="${cur[it.id] || 0}" style="width:110px"/></td></tr>`).join("")
+      || '<tr><td colspan="2" class="muted">페인트후 검사항목 없음 — 위 "검사항목 편집"에서 추가</td></tr>';
+    return `<div class="ih-detail">
+      <div class="ih-detail-head"><b>${esc(b.batch_date)}</b> 반납분 <span class="pill">수정 중</span>
+        <span style="float:right;display:inline-flex;gap:6px">
+          <button class="mini primary" data-act="pb-edit-save" data-id="${b.id}">저장</button>
+          <button class="mini" data-act="pb-edit-cancel">취소</button></span></div>
+      <label class="field" style="max-width:220px;margin:8px 0"><span>양품 수량</span>
+        <input type="number" min="0" id="pb-edit-good" value="${n2(b.good_qty)}"/></label>
+      <table class="tbl ih-def"><thead><tr><th>불량유형</th><th class="right">불량수량</th></tr></thead>
+        <tbody>${rows}</tbody></table>
+      <p class="muted" style="font-size:12px;margin:6px 0 0">불량률·집계는 저장 시 자동 반영됩니다. 0 으로 두면 그 유형은 제외됩니다.</p>
     </div>`;
   }
 
@@ -169,7 +199,19 @@ window.PaintBatch = (function () {
       if (e.target.id === "pb-commit-btn") return commitExcel();
       if (e.target.id === "pb-save-btn") return saveManual();
       const chip = e.target.closest(".ih-col");
-      if (chip) { pbSel[Number(chip.dataset.prism)] = Number(chip.dataset.bid); render(); return; }
+      if (chip) { editingBid = null; pbSel[Number(chip.dataset.prism)] = Number(chip.dataset.bid); render(); return; }
+      const edit = e.target.closest('[data-act="pb-edit"]');
+      if (edit) { editingBid = Number(edit.dataset.id); render(); return; }
+      if (e.target.closest('[data-act="pb-edit-cancel"]')) { editingBid = null; render(); return; }
+      const save = e.target.closest('[data-act="pb-edit-save"]');
+      if (save) {
+        const good = el("pb-edit-good");
+        const defects = [...document.querySelectorAll(".pb-edit-def")].map((i) => ({ item_id: Number(i.dataset.item), qty: Number(i.value || 0) }));
+        const r = await post("/api/paint-batch/update", { id: Number(save.dataset.id), good_qty: good ? good.value : 0, defects });
+        if (r.ok) { toast(`수정됨 (양품 ${n(r.good_qty)} / 불량 ${n(r.defect_qty)})`, "ok"); editingBid = null; await reload(); }
+        else toast(r.error || "실패", "warn");
+        return;
+      }
       const del = e.target.closest('[data-act="pb-del"]');
       if (del) {
         if (!confirm("이 배치를 삭제할까요?")) return;
