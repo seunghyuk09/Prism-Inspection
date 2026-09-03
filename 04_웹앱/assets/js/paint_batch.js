@@ -24,11 +24,16 @@ window.PaintBatch = (function () {
     let rows;
     if (b.defects && b.defects.length) {
       const maxq = Math.max.apply(null, b.defects.map((d) => n2(d.defect_qty))) || 1;
-      rows = b.defects.map((d) =>
-        `<tr><td>${esc(d.name)}</td><td class="right">${n(d.defect_qty)}</td>
-          <td class="ih-barcell"><span class="ih-bar" style="width:${Math.round(n2(d.defect_qty) / maxq * 100)}%"></span></td></tr>`).join("");
+      // 불량률(%) = 해당 유형 수량 / 반납수량 — 집계(post_rate)와 동일 기준, 합이 전체 불량률과 일치
+      rows = b.defects.map((d) => {
+        const q = n2(d.defect_qty);
+        const prate = total ? (q / total * 100).toFixed(2) : "0.00";
+        return `<tr><td>${esc(d.name)}</td><td class="right">${n(q)}</td>
+          <td class="right">${prate}%</td>
+          <td class="ih-barcell"><span class="ih-bar" style="width:${Math.round(q / maxq * 100)}%"></span></td></tr>`;
+      }).join("");
     } else {
-      rows = '<tr><td colspan="3" class="muted">불량 없음</td></tr>';
+      rows = '<tr><td colspan="4" class="muted">불량 없음</td></tr>';
     }
     return `<div class="ih-detail">
       <div class="ih-detail-head"><b>${esc(b.batch_date)}</b> 반납분 <span class="pill active">등록</span>
@@ -41,7 +46,7 @@ window.PaintBatch = (function () {
         <div class="ih-stat"><span>불량</span><b class="ih-bad">${n(b.defect_qty)}</b></div>
         <div class="ih-stat"><span>불량률</span><b>${rate}</b></div>
       </div>
-      <table class="tbl ih-def"><thead><tr><th>불량유형</th><th class="right">수량</th><th>비중</th></tr></thead>
+      <table class="tbl ih-def"><thead><tr><th>불량유형</th><th class="right">수량</th><th class="right">불량률</th><th>비중</th></tr></thead>
         <tbody>${rows}</tbody></table>
     </div>`;
   }
