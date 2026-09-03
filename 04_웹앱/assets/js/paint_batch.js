@@ -21,6 +21,7 @@ window.PaintBatch = (function () {
     if (canEdit && editingBid === b.id) return pbEditForm(b);   // 인라인 수정 모드
     const total = n2(b.good_qty) + n2(b.defect_qty);
     const rate = total ? (n2(b.defect_qty) / total * 100).toFixed(2) + "%" : "—";
+    const goodRate = total ? (n2(b.good_qty) / total * 100).toFixed(2) + "%" : "—";
     let rows;
     if (b.defects && b.defects.length) {
       const maxq = Math.max.apply(null, b.defects.map((d) => n2(d.defect_qty))) || 1;
@@ -43,6 +44,7 @@ window.PaintBatch = (function () {
       <div class="ih-stat-row">
         <div class="ih-stat"><span>반납수량</span><b>${n(total)}</b></div>
         <div class="ih-stat"><span>양품</span><b class="yes">${n(b.good_qty)}</b></div>
+        <div class="ih-stat"><span>양품률</span><b class="yes">${goodRate}</b></div>
         <div class="ih-stat"><span>불량</span><b class="ih-bad">${n(b.defect_qty)}</b></div>
         <div class="ih-stat"><span>불량률</span><b>${rate}</b></div>
       </div>
