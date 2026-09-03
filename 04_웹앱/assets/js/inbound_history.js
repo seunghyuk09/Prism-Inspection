@@ -14,6 +14,8 @@ window.InboundHistory = (function () {
   function detailHtml(d) {
     if (!d) return '<div class="ih-detail muted">날짜를 선택하세요.</div>';
     const rateTxt = d.defect_rate == null ? "미확정" : d.defect_rate + "%";
+    // 양품률 = 양품 / 입고수량 (불량률과 같은 분모 = received_qty). 미검사면 —
+    const goodRate = (d.good == null || !d.qty) ? "—" : (d.good / d.qty * 100).toFixed(2) + "%";
     const pill = d.status === "검사완료"
       ? '<span class="pill active">검사완료</span>'
       : '<span class="pill remnant">검사중</span>';
@@ -21,11 +23,15 @@ window.InboundHistory = (function () {
     let rows;
     if (d.defects && d.defects.length) {
       const maxq = Math.max.apply(null, d.defects.map((x) => x.qty)) || 1;
-      rows = d.defects.map((x) =>
-        `<tr><td>${esc(x.name)}</td><td class="right">${n(x.qty)}</td>
-          <td class="ih-barcell"><span class="ih-bar" style="width:${Math.round(x.qty / maxq * 100)}%"></span></td></tr>`).join("");
+      // 불량률(%) = 해당 유형 / 입고수량 — 유형별 합이 전체 불량률과 일치
+      rows = d.defects.map((x) => {
+        const prate = d.qty ? (x.qty / d.qty * 100).toFixed(2) : "0.00";
+        return `<tr><td>${esc(x.name)}</td><td class="right">${n(x.qty)}</td>
+          <td class="right">${prate}%</td>
+          <td class="ih-barcell"><span class="ih-bar" style="width:${Math.round(x.qty / maxq * 100)}%"></span></td></tr>`;
+      }).join("");
     } else {
-      rows = `<tr><td colspan="3" class="muted">${d.status === "검사중" ? "검사 진행 중 — 양·불 미확정" : "불량 없음"}</td></tr>`;
+      rows = `<tr><td colspan="4" class="muted">${d.status === "검사중" ? "검사 진행 중 — 양·불 미확정" : "불량 없음"}</td></tr>`;
     }
 
     return `<div class="ih-detail">
@@ -33,10 +39,11 @@ window.InboundHistory = (function () {
       <div class="ih-stat-row">
         <div class="ih-stat"><span>입고수량</span><b>${n(d.qty)}</b></div>
         <div class="ih-stat"><span>양품</span><b class="yes">${d.good == null ? "—" : n(d.good)}</b></div>
+        <div class="ih-stat"><span>양품률</span><b class="yes">${goodRate}</b></div>
         <div class="ih-stat"><span>불량</span><b class="ih-bad">${d.defect == null ? "—" : n(d.defect)}</b></div>
         <div class="ih-stat"><span>불량률</span><b>${rateTxt}</b></div>
       </div>
-      <table class="tbl ih-def"><thead><tr><th>불량유형</th><th class="right">수량</th><th>비중</th></tr></thead>
+      <table class="tbl ih-def"><thead><tr><th>불량유형</th><th class="right">수량</th><th class="right">불량률</th><th>비중</th></tr></thead>
         <tbody>${rows}</tbody></table>
     </div>`;
   }
