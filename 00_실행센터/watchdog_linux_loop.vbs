@@ -4,14 +4,14 @@
 '   - Silent (wscript, no window). Auto-started at logon.
 ' ===================================================================
 Option Explicit
-Dim sh, fso, q, single
+Dim sh, fso, q, oneShot
 Set sh = CreateObject("WScript.Shell")
 Set fso = CreateObject("Scripting.FileSystemObject")
 q = Chr(34)
-single = fso.GetParentFolderName(WScript.ScriptFullName) & "\watchdog_linux.vbs"
+oneShot = fso.GetParentFolderName(WScript.ScriptFullName) & "\watchdog_linux.vbs"
 Do
-  If fso.FileExists(single) Then
-    sh.Run "wscript " & q & single & q, 0, True
+  If fso.FileExists(oneShot) Then
+    sh.Run "wscript " & q & oneShot & q, 0, True
   End If
   WScript.Sleep 120000   ' 2 minutes
 Loop
