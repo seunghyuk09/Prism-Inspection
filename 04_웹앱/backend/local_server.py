@@ -36,6 +36,8 @@ import plan_service             # noqa: E402
 import paint_batch_service       # noqa: E402
 import ledger_service            # noqa: E402
 import log_service               # noqa: E402
+import print_job_service         # noqa: E402
+import consumption_service       # noqa: E402
 import report_service           # noqa: E402
 import auth                      # noqa: E402
 
@@ -64,6 +66,10 @@ GET_LIST_ROUTES = {
     "/api/plans":            plan_service.list_plans,
     "/api/painted-prisms":   paint_batch_service.painted_prisms,
     "/api/paint-batches":    paint_batch_service.list_batches,
+    "/api/printable-prisms": print_job_service.printable_prisms,
+    "/api/print-jobs":       print_job_service.list_jobs,
+    "/api/consumable-products": consumption_service.consumable_products,
+    "/api/consumptions":     consumption_service.list_consumption,
     "/api/logs":             log_service.list_logs,
 }
 
@@ -97,6 +103,11 @@ POST_ROUTES = {
     "/api/paint-batch/delete":      (paint_batch_service.delete,     "페인트후", "삭제"),
     "/api/paint-batch/preview":     (paint_batch_service.preview_excel, "페인트후", "미리보기"),
     "/api/paint-batch/commit":      (paint_batch_service.commit_excel,  "페인트후", "업로드"),
+    "/api/print-job/save":          (print_job_service.save,         "인쇄", "등록"),
+    "/api/print-job/update":        (print_job_service.update,       "인쇄", "수정"),
+    "/api/print-job/delete":        (print_job_service.delete,       "인쇄", "삭제"),
+    "/api/consumption/save":        (consumption_service.save,       "소비", "등록"),
+    "/api/consumption/delete":      (consumption_service.delete,     "소비", "삭제"),
     "/api/ledger/preview":          (ledger_service.preview,         "수불부", "미리보기"),
     "/api/ledger/commit":           (ledger_service.commit,          "수불부", "확정"),
 }

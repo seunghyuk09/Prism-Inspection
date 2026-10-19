@@ -16,11 +16,13 @@ const NAV = [
   { cat: "입고이력", panel: "inbound_history" },
   { cat: "검사 · 페인트", items: [
       { label: "입고검사", panel: "inspection_in" },
+      { label: "인쇄 작업", panel: "print_job" },
       { label: "페인트 발송·회수", panel: "paint" },
       { label: "페인트후검사", panel: "inspection_post" },
   ] },
   { cat: "소비 · 잔량", items: [
       { label: "구매계획 임포트", panel: "plan" },
+      { label: "생산 소모", panel: "consumption" },
       { label: "잔량 현황", panel: "stock" },
   ] },
   { cat: "집계 · 관리", items: [
@@ -39,6 +41,8 @@ function showPanel(name, sub) {
   if (name === "paint" && window.Inspection) window.Inspection.showStage("PAINT");
   if (name === "inspection_post" && window.Inspection) window.Inspection.showStage("POST_PAINT");
   if (name === "plan" && window.Plan) window.Plan.show();
+  if (name === "print_job" && window.PrintJob) window.PrintJob.show();
+  if (name === "consumption" && window.Consumption) window.Consumption.show();
   if (name === "stock" && window.Stock) window.Stock.show();
   if (name === "report") { if (window.Report) window.Report.show(); loadDashboard(); }
   if (name === "log" && window.Log) window.Log.show();

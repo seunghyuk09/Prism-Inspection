@@ -3,8 +3,8 @@
 
 도장상태별 잔량 계산식:
   - NONE(유리)   : 기초보정 + Σ입고검사양품 − Σ소비
-  - RAW(미도장)  : 기초보정 + Σ입고검사양품 − Σ페인트발송 − Σ소비
-  - PAINTED(도장): 기초보정 + Σ(페어 RAW 로트의 페인트후 양품) − Σ소비
+  - RAW(미도장)  : 기초보정 + Σ입고검사양품 − Σ페인트발송 − Σ인쇄투입 − Σ소비
+  - PAINTED(도장): 기초보정 + Σ(페어 RAW 로트의 페인트후 양품) + Σ인쇄산출 − Σ소비
 페인트후 양품이 '도장완료 코드' 재고로 전환되는 페어(painted_into_id)를 활용한다.
 """
 from __future__ import annotations
@@ -45,18 +45,26 @@ def stock_status(data=None) -> dict:
                 "JOIN lot l ON l.id=i.lot_id JOIN receipt r ON r.id=l.receipt_id "
                 "JOIN prism_master pm ON pm.id=r.prism_id "
                 "WHERE i.stage='POST_PAINT' AND pm.painted_into_id=?", (cid,))
+            # 인쇄 작업: 투입분은 RAW 에서 빠지고, 산출분은 With Paint 로 들어온다
+            printed_input = _scalar(conn,
+                "SELECT COALESCE(SUM(input_qty),0) s FROM print_job WHERE raw_prism_id=?", (cid,))
+            printed_output = _scalar(conn,
+                "SELECT COALESCE(SUM(output_qty),0) s FROM print_job WHERE painted_prism_id=?", (cid,))
 
             ps = p["paint_state"]
             if ps == "PAINTED":
-                produced, on_hand, basis = painted_in, adj + painted_in - consumed, "페인트후 양품"
+                produced = painted_in + printed_output
+                on_hand = adj + produced - consumed
+                basis = "페인트후 양품 + 인쇄 산출"
             elif ps == "RAW":
                 produced = incoming_good
-                on_hand = adj + incoming_good - sent_paint - consumed
-                basis = "입고양품 − 페인트발송"
+                on_hand = adj + incoming_good - sent_paint - printed_input - consumed
+                basis = "입고양품 − 페인트발송 − 인쇄투입"
             else:  # NONE (유리)
                 produced, on_hand, basis = incoming_good, adj + incoming_good - consumed, "입고검사 양품"
 
             rows.append({**dict(p), "opening_adj": adj, "produced": produced,
+                         "printed_input": printed_input, "printed_output": printed_output,
                          "sent_paint": sent_paint, "consumed": consumed, "on_hand": on_hand, "basis": basis,
                          "unusable": unusable, "available": on_hand - unusable})
         return {"ok": True, "items": rows}

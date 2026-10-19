@@ -181,3 +181,24 @@ def stage_needs_paint(prism_type: str, stage: str) -> bool:
     if stage == "POST_PAINT":
         return is_plastic(prism_type)
     return True
+
+def can_print_prism(paint_state: str, painted_into_id) -> bool:
+    """인쇄 투입이 가능한가 — 미도장(RAW)이고 산출될 With Paint 품목이 연결돼 있어야 한다."""
+    return paint_state == "RAW" and bool(painted_into_id)
+
+
+def print_output_within_input(input_qty, output_qty, defect_qty) -> bool:
+    """산출(양품+불량)이 투입을 넘지 않는가."""
+    return _to_int(output_qty) + _to_int(defect_qty) <= _to_int(input_qty)
+
+
+def validate_print_job(input_qty, output_qty, defect_qty) -> tuple[bool, str]:
+    """인쇄 작업 수량 검증."""
+    iq, oq, dq = _to_int(input_qty), _to_int(output_qty), _to_int(defect_qty)
+    if iq <= 0:
+        return fail("투입 수량을 입력하세요.")
+    if oq < 0 or dq < 0:
+        return fail("산출·불량 수량은 0 이상이어야 합니다.")
+    if not print_output_within_input(iq, oq, dq):
+        return fail(f"산출({oq}) + 불량({dq}) 이 투입({iq}) 보다 많습니다.")
+    return ok()

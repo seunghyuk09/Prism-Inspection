@@ -17,6 +17,9 @@ window.Stock = (function () {
       const low = p.on_hand < 0;
       const unusable = Number(p.unusable || 0);
       const sentCell = p.paint_state === "RAW" ? n(p.sent_paint) : "—";
+      // 인쇄: 미도장은 투입(차감), 도장완료는 산출(증가)
+      const pin = Number(p.printed_input || 0), pout = Number(p.printed_output || 0);
+      const printCell = pin ? "−" + n(pin) : (pout ? "+" + n(pout) : "—");
       return `<tr>
         <td>${esc(p.item_code || "—")}</td>
         <td>${esc(p.prism_type)} ${esc(p.model || "")}</td>
@@ -24,6 +27,7 @@ window.Stock = (function () {
         <td>${esc(p.supplier_name || "—")} ${p.supplier_status && p.supplier_status !== "ACTIVE" ? supPill(p.supplier_status) : ""}</td>
         <td class="right">${n(p.produced)}</td>
         <td class="right">${sentCell}</td>
+        <td class="right">${printCell}</td>
         <td class="right">${n(p.consumed)}</td>
         <td class="right">${n(p.opening_adj)}</td>
         <td class="right" style="font-weight:800;${low ? "color:var(--danger-text)" : ""}">${n(p.on_hand)}</td>
@@ -33,12 +37,12 @@ window.Stock = (function () {
     }).join("");
     return `<table class="tbl"><thead><tr>
       <th>품목코드</th><th>종류/모델</th><th>도장</th><th>공급사</th>
-      <th class="right">생산·입고</th><th class="right">페인트발송</th><th class="right">소비</th><th class="right">기초/보정</th>
+      <th class="right">생산·입고</th><th class="right">페인트발송</th><th class="right">인쇄</th><th class="right">소비</th><th class="right">기초/보정</th>
       <th class="right">현재고</th><th class="right">사용불가</th><th class="right">가용재고</th>
-      </tr></thead><tbody>${rows || '<tr><td colspan="11" class="muted">데이터 없음</td></tr>'}</tbody></table>
-      <p class="muted" style="margin-top:8px">현재고 = 기초/보정 + 생산·입고 − (페인트발송) − 소비.
+      </tr></thead><tbody>${rows || '<tr><td colspan="12" class="muted">데이터 없음</td></tr>'}</tbody></table>
+      <p class="muted" style="margin-top:8px">현재고 = 기초/보정 + 생산·입고 − (페인트발송) − (인쇄 투입) − 소비.
       <b>사용불가</b>=불량·보류(현재고에 포함), <b>가용재고</b>=현재고 − 사용불가.
-      유리=입고검사 양품, 미도장=입고양품−페인트발송, 도장완료=페인트후 양품.</p>`;
+      유리=입고검사 양품, 미도장=입고양품−페인트발송−인쇄투입, 도장완료=페인트후 양품+인쇄산출.<br/><b>인쇄</b>: 미도장은 −투입(빠져나간 양), 도장완료는 +산출(들어온 양).</p>`;
   }
 
   function adjustForm() {

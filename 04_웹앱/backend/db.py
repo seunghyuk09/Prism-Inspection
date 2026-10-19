@@ -312,6 +312,23 @@ CREATE TABLE IF NOT EXISTS paint_batch_defect (
     FOREIGN KEY (batch_id) REFERENCES paint_batch(id),
     FOREIGN KEY (inspection_item_id) REFERENCES inspection_item(id)
 );
+CREATE TABLE IF NOT EXISTS print_job (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    print_date       TEXT NOT NULL,                        -- 인쇄일
+    raw_prism_id     INTEGER NOT NULL,                     -- 투입: 미도장(RAW) 프리즘
+    painted_prism_id INTEGER NOT NULL,                     -- 산출: With Paint(PAINTED) 프리즘
+    input_qty        INTEGER NOT NULL CHECK (input_qty > 0),   -- 투입 수량(RAW 차감)
+    output_qty       INTEGER NOT NULL DEFAULT 0,           -- 산출 양품(With Paint 증가)
+    defect_qty       INTEGER NOT NULL DEFAULT 0,           -- 인쇄 불량
+    vendor           TEXT,                                 -- 외주처(우경 등)
+    note             TEXT,
+    operator         TEXT,
+    created_at       TEXT NOT NULL,
+    updated_at       TEXT NOT NULL,
+    FOREIGN KEY (raw_prism_id)     REFERENCES prism_master(id),
+    FOREIGN KEY (painted_prism_id) REFERENCES prism_master(id)
+);
+
 
 -- 행위/이력 로그: 로그인은 없지만 '누가(operator) 언제 무엇을' 기록(기록 신뢰성).
 CREATE TABLE IF NOT EXISTS activity_log (
@@ -482,9 +499,33 @@ def _init_pg() -> None:
                 conn.executescript(SCHEMA_PG_FILE.read_text(encoding="utf-8"))
                 conn.commit()
             _seed(conn)
+        else:
+            _migrate_pg(conn)      # 이미 쓰던 DB 에도 새로 추가된 테이블을 만들어 준다
         conn.commit()
     finally:
         conn.close()
+
+
+def _migrate_pg(conn) -> None:
+    """PG 마이그레이션 — 스키마 파일의 CREATE TABLE IF NOT EXISTS 구문만 다시 돌린다.
+
+    이미 있는 테이블은 IF NOT EXISTS 로 무시되므로, 새로 추가한 테이블만 생성된다.
+    제약조건(ALTER TABLE ADD CONSTRAINT)은 재실행이 안전하지 않아 건드리지 않는다.
+    """
+    if not SCHEMA_PG_FILE.exists():
+        return
+    sql = SCHEMA_PG_FILE.read_text(encoding="utf-8")
+    for m in re.finditer(r"CREATE TABLE IF NOT EXISTS\s+\w+\s*\(.*?\n\);", sql, re.S):
+        # PG 는 트랜잭션 안에서 한 번 실패하면 이후 문장이 모두 막힌다.
+        # 문장마다 커밋하고, 실패하면 롤백해서 다음 테이블에 영향이 가지 않게 한다.
+        try:
+            conn.execute(m.group(0))
+            conn.commit()
+        except Exception:  # noqa: BLE001 — 개별 테이블 실패가 기동을 막지 않도록
+            try:
+                conn.rollback()
+            except Exception:  # noqa: BLE001
+                pass
 
 
 def _seed(conn: sqlite3.Connection) -> None:
