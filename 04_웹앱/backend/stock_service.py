@@ -12,6 +12,10 @@ from __future__ import annotations
 import db
 import rules
 
+# unusable_stock.category 값. '불량' 은 사내 불량창고, 아래는 사급으로 외주(우경)에 가 있는 양.
+# 둘 다 현재고엔 포함되지만 가용재고에서는 뺀다.
+VENDOR_HELD_CATEGORY = "우경보관"
+
 
 def _scalar(conn, sql, params):
     return conn.execute(sql, params).fetchone()["s"]
@@ -32,7 +36,12 @@ def stock_status(data=None) -> dict:
             cid = p["id"]
             adj = _scalar(conn, "SELECT COALESCE(SUM(qty),0) s FROM stock_adjustment WHERE prism_id=?", (cid,))
             consumed = _scalar(conn, "SELECT COALESCE(SUM(qty),0) s FROM consumption WHERE prism_id=?", (cid,))
-            unusable = _scalar(conn, "SELECT COALESCE(SUM(qty),0) s FROM unusable_stock WHERE prism_id=?", (cid,))
+            unusable = _scalar(conn,
+                "SELECT COALESCE(SUM(qty),0) s FROM unusable_stock WHERE prism_id=? AND COALESCE(category,'') <> ?",
+                (cid, VENDOR_HELD_CATEGORY))
+            vendor_held = _scalar(conn,
+                "SELECT COALESCE(SUM(qty),0) s FROM unusable_stock WHERE prism_id=? AND category=?",
+                (cid, VENDOR_HELD_CATEGORY))
             incoming_good = _scalar(conn,
                 "SELECT COALESCE(SUM(i.good_qty),0) s FROM inspection i "
                 "JOIN lot l ON l.id=i.lot_id JOIN receipt r ON r.id=l.receipt_id "
@@ -66,7 +75,8 @@ def stock_status(data=None) -> dict:
             rows.append({**dict(p), "opening_adj": adj, "produced": produced,
                          "printed_input": printed_input, "printed_output": printed_output,
                          "sent_paint": sent_paint, "consumed": consumed, "on_hand": on_hand, "basis": basis,
-                         "unusable": unusable, "available": on_hand - unusable})
+                         "unusable": unusable, "vendor_held": vendor_held,
+                         "available": on_hand - unusable - vendor_held})
         return {"ok": True, "items": rows}
     finally:
         conn.close()
